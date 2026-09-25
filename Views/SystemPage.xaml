@@ -1,0 +1,78 @@
+<UserControl x:Class="Kelvra.SystemPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Kelvra">
+    <DockPanel Margin="28,24,16,20">
+        <Grid DockPanel.Dock="Top" Margin="0,0,12,16">
+            <StackPanel>
+                <TextBlock Text="System" Style="{StaticResource H1}" />
+                <TextBlock x:Name="Subtitle" Text="A summary of your PC's hardware and Windows." Style="{StaticResource Muted}" Margin="0,4,0,0" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <Button Click="Refresh_Click" Margin="0,0,8,0">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE72C;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,8,0" />
+                        <TextBlock Text="Refresh" />
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource AccentButton}" Click="Copy_Click" ToolTip="Copy everything as text, e.g. for a forum post">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE8C8;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,8,0" />
+                        <TextBlock Text="Copy summary" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <Grid>
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="Sections">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type local:InfoSection}">
+                            <Border Style="{StaticResource Card}" Width="400" Margin="0,0,12,12" VerticalAlignment="Top">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                        <Border Width="32" Height="32" CornerRadius="8" Background="{DynamicResource AccentSoftBrush}">
+                                            <TextBlock Text="{Binding Icon}" Style="{StaticResource Icon}" FontSize="15" HorizontalAlignment="Center"
+                                                       Foreground="{DynamicResource AccentBrush}" />
+                                        </Border>
+                                        <TextBlock Text="{Binding Title}" Style="{StaticResource H2}" Margin="12,0,0,0" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <ItemsControl ItemsSource="{Binding Lines}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type local:InfoLine}">
+                                                <Grid Margin="0,3">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="130" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{Binding Label}" Style="{StaticResource Muted}" FontSize="13" TextWrapping="NoWrap"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <TextBox Grid.Column="1" Text="{Binding Value, Mode=OneWay}" IsReadOnly="True" BorderThickness="0"
+                                                             Background="Transparent" Padding="0" TextWrapping="Wrap">
+                                                        <TextBox.Template>
+                                                            <ControlTemplate TargetType="TextBox">
+                                                                <ScrollViewer x:Name="PART_ContentHost" />
+                                                            </ControlTemplate>
+                                                        </TextBox.Template>
+                                                    </TextBox>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+            <TextBlock x:Name="LoadingText" Text="Collecting system information…" Style="{StaticResource Muted}" FontSize="14"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Grid>
+    </DockPanel>
+</UserControl>

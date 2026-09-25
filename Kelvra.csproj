@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <AssemblyName>Kelvra</AssemblyName>
+    <Product>Kelvra</Product>
+    <Version>1.0.0</Version>
+    <Description>Hardware monitor, in-game overlays and PC toolkit for Windows.</Description>
+    <Copyright>Copyright © 2026 Kelvra contributors</Copyright>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- WinForms is only used for the tray icon; keep its types out of the global namespace -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+    <Using Include="System.IO" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\app.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
+  </ItemGroup>
+
+  <!--
+    PawnIO driver installer (https://pawnio.eu). Needed for CPU temperatures/voltages.
+    Downloaded from the official release at build time (not committed to git), hash-checked,
+    and embedded so Kelvra can offer to install it on first run.
+  -->
+  <PropertyGroup>
+    <PawnIOVersion>2.2.0</PawnIOVersion>
+    <PawnIOSha256>1F519A22E47187F70A1379A48CA604981C4FCF694F4E65B734AAA74A9FBA3032</PawnIOSha256>
+    <PawnIODir>$(MSBuildProjectDirectory)\Assets\PawnIO\$(PawnIOVersion)</PawnIODir>
+    <PawnIOSetup>$(PawnIODir)\PawnIO_setup.exe</PawnIOSetup>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="$(PawnIOSetup)" LogicalName="PawnIO_setup.exe" />
+  </ItemGroup>
+
+  <Target Name="DownloadPawnIO" BeforeTargets="PrepareForBuild">
+    <DownloadFile Condition="!Exists('$(PawnIOSetup)')"
+                  SourceUrl="https://github.com/namazso/PawnIO.Setup/releases/download/$(PawnIOVersion)/PawnIO_setup.exe"
+                  DestinationFolder="$(PawnIODir)" />
+    <VerifyFileHash File="$(PawnIOSetup)" Hash="$(PawnIOSha256)" Algorithm="SHA256" />
+  </Target>
+
+</Project>
