@@ -1,0 +1,7 @@
+# Normalise line endings for text, keep binaries untouched
+* text=auto eol=crlf
+
+*.png binary
+*.ico binary
+*.exe binary
+*.dll binary

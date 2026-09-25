@@ -1,0 +1,88 @@
+<UserControl x:Class="Kelvra.DuplicatesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Kelvra">
+    <Border Style="{StaticResource Card}" Margin="0" Padding="8">
+        <DockPanel>
+            <Grid DockPanel.Dock="Top" Margin="12,8,12,10">
+                <StackPanel>
+                    <TextBlock Text="Duplicate files" Style="{StaticResource H2}" Margin="0" />
+                    <TextBlock x:Name="Summary" Style="{StaticResource Muted}" Margin="0,4,0,0"
+                               Text="Finds files with identical content in the drive or folder you scanned in Analyzer." />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <TextBlock Text="At least" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <Border Style="{StaticResource SegmentHost}" Margin="0,0,12,0">
+                        <StackPanel x:Name="SizeButtons" Orientation="Horizontal">
+                            <RadioButton Style="{StaticResource Segment}" Content="1 MB" Tag="1" GroupName="DupSize" Checked="Size_Checked" />
+                            <RadioButton Style="{StaticResource Segment}" Content="10 MB" Tag="10" GroupName="DupSize" Checked="Size_Checked" />
+                            <RadioButton Style="{StaticResource Segment}" Content="100 MB" Tag="100" GroupName="DupSize" Checked="Size_Checked" />
+                        </StackPanel>
+                    </Border>
+                    <CheckBox x:Name="SkipWindows" Content="Skip Windows folder" IsChecked="True" VerticalAlignment="Center" Margin="0,0,12,0" />
+                    <Button x:Name="FindButton" Style="{StaticResource AccentButton}" Content="Find duplicates" Click="Find_Click" />
+                </StackPanel>
+            </Grid>
+
+            <!-- progress -->
+            <Grid x:Name="ProgressPanel" DockPanel.Dock="Top" Margin="12,0,12,10" Visibility="Collapsed">
+                <StackPanel>
+                    <TextBlock x:Name="ProgressText" />
+                    <Grid x:Name="ProgressTrack" Height="6" Margin="0,6,0,0">
+                        <Border CornerRadius="3" Background="{DynamicResource SwitchOffBrush}" />
+                        <Border x:Name="ProgressFill" CornerRadius="3" Background="{DynamicResource AccentBrush}" HorizontalAlignment="Left" Width="0" />
+                    </Grid>
+                </StackPanel>
+                <Button Content="Cancel" HorizontalAlignment="Right" VerticalAlignment="Top" Padding="10,3" Click="Cancel_Click" />
+            </Grid>
+
+            <!-- selection actions -->
+            <Grid x:Name="ActionBar" DockPanel.Dock="Top" Margin="12,0,12,8" Visibility="Collapsed">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Select:" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <Button Style="{StaticResource GhostButton}" Padding="8,4" Content="All but the newest" Click="KeepNewest_Click" />
+                    <Button Style="{StaticResource GhostButton}" Padding="8,4" Content="All but the oldest" Click="KeepOldest_Click" />
+                    <Button Style="{StaticResource GhostButton}" Padding="8,4" Content="None" Click="SelectNone_Click" />
+                </StackPanel>
+                <Button x:Name="RecycleButton" Style="{StaticResource DangerButton}" HorizontalAlignment="Right" Click="Recycle_Click"
+                        Content="Move selected to Recycle Bin" IsEnabled="False" />
+            </Grid>
+            <Rectangle DockPanel.Dock="Top" Height="1" Fill="{DynamicResource LineBrush}" Margin="6,0" />
+
+            <Grid>
+                <ListView x:Name="ResultList" ItemContainerStyle="{StaticResource PlainRow}"
+                          VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
+                    <ListView.Resources>
+                        <DataTemplate DataType="{x:Type local:DuplicateGroup}">
+                            <StackPanel Margin="0,10,0,2">
+                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding Detail}" Style="{StaticResource Muted}" />
+                            </StackPanel>
+                        </DataTemplate>
+                        <DataTemplate DataType="{x:Type local:DuplicateFile}">
+                            <Grid Margin="18,0,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="150" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <CheckBox IsChecked="{Binding Selected}" VerticalAlignment="Center" Click="FileCheck_Click" />
+                                <StackPanel Grid.Column="1" Margin="10,0" ToolTip="{Binding Path}">
+                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding Folder}" Style="{StaticResource Muted}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" Text="{Binding ModifiedText}" Style="{StaticResource Muted}" VerticalAlignment="Center" />
+                                <Button Grid.Column="3" Style="{StaticResource IconButton}" Content="&#xE838;" Click="ShowFile_Click" ToolTip="Show in Explorer" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.Resources>
+                </ListView>
+                <TextBlock x:Name="EmptyText" Style="{StaticResource Muted}" FontSize="14" TextAlignment="Center"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Text="Scan a drive or folder in Analyzer first, then press “Find duplicates”." />
+            </Grid>
+        </DockPanel>
+    </Border>
+</UserControl>

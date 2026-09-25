@@ -1,0 +1,54 @@
+<UserControl x:Class="Kelvra.CategoriesPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Kelvra">
+    <UserControl.Resources>
+        <ItemsPanelTemplate x:Key="TilePanel">
+            <WrapPanel />
+        </ItemsPanelTemplate>
+
+        <DataTemplate x:Key="TileTemplate" DataType="{x:Type local:CategoryVm}">
+            <Button Style="{StaticResource Tile}" Width="236" Margin="0,0,12,12" Click="Tile_Click" AutomationProperties.Name="{Binding Name}"
+                    ToolTip="{Binding Name, StringFormat='Show only {0} sensors'}">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Border Width="38" Height="38" CornerRadius="10" Background="{DynamicResource AccentSoftBrush}">
+                            <TextBlock Text="{Binding Icon}" Style="{StaticResource Icon}" FontSize="18" HorizontalAlignment="Center"
+                                       Foreground="{DynamicResource AccentBrush}" />
+                        </Border>
+                        <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding CountText}" Style="{StaticResource Muted}" />
+                        </StackPanel>
+                        <TextBlock Grid.Column="2" Text="&#xE76C;" Style="{StaticResource Icon}" FontSize="11"
+                                   Foreground="{DynamicResource MutedBrush}" />
+                    </Grid>
+                    <TextBlock Text="{Binding Headline}" FontSize="18" FontWeight="SemiBold" Margin="0,14,0,0"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding Detail}" Style="{StaticResource Muted}" TextWrapping="NoWrap"
+                               TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+                </StackPanel>
+            </Button>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="28,24,16,20">
+            <TextBlock Text="Categories" Style="{StaticResource H1}" />
+            <TextBlock Text="Pick a category to see only its sensors." Style="{StaticResource Muted}" Margin="0,4,0,20" />
+
+            <TextBlock Text="HARDWARE" Style="{StaticResource Muted}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,10" />
+            <ItemsControl x:Name="HardwareTiles" ItemsPanel="{StaticResource TilePanel}" ItemTemplate="{StaticResource TileTemplate}" />
+
+            <TextBlock Text="SENSOR TYPES" Style="{StaticResource Muted}" FontSize="11" FontWeight="SemiBold" Margin="0,16,0,10" />
+            <ItemsControl x:Name="TypeTiles" ItemsPanel="{StaticResource TilePanel}" ItemTemplate="{StaticResource TileTemplate}" />
+
+            <TextBlock x:Name="LoadingText" Text="Detecting hardware…" Style="{StaticResource Muted}" FontSize="13" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -1,0 +1,139 @@
+<UserControl x:Class="Kelvra.HistoryPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Kelvra">
+    <UserControl.Resources>
+        <ItemsPanelTemplate x:Key="CardPanel">
+            <WrapPanel />
+        </ItemsPanelTemplate>
+
+        <!-- Small cards (All / Categories) -->
+        <DataTemplate x:Key="SmallCard" DataType="{x:Type local:ChartItem}">
+            <Border Style="{StaticResource Card}" Width="340" Margin="0,0,12,12" Padding="14,12">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Muted}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" Text="{Binding Sensor.ValueText}" FontSize="16" FontWeight="SemiBold"
+                                   Foreground="{Binding Brush}" VerticalAlignment="Center" Margin="8,0,4,0" />
+                        <Button x:Name="Pin" Grid.Column="2" Style="{StaticResource IconButton}" Content="&#xE734;" Width="26" Height="26"
+                                Click="Pin_Click" ToolTip="Add to your selection" VerticalAlignment="Top" />
+                    </Grid>
+                    <local:ChartControl Height="86" Margin="0,10,0,6" />
+                    <TextBlock Text="{Binding StatsText}" Style="{StaticResource Muted}" FontSize="11" TextWrapping="NoWrap" />
+                </StackPanel>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsPinned}" Value="True">
+                    <Setter TargetName="Pin" Property="Content" Value="&#xE735;" />
+                    <Setter TargetName="Pin" Property="Foreground" Value="{DynamicResource WarnBrush}" />
+                    <Setter TargetName="Pin" Property="ToolTip" Value="Remove from your selection" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- Large cards (Selected) -->
+        <DataTemplate x:Key="LargeCard" DataType="{x:Type local:ChartItem}">
+            <Border Style="{StaticResource Card}" Width="520" Margin="0,0,12,12">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Muted}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" Text="{Binding Sensor.ValueText}" FontSize="22" FontWeight="SemiBold"
+                                   Foreground="{Binding Brush}" VerticalAlignment="Center" Margin="8,0,6,0" />
+                        <Button Grid.Column="2" Style="{StaticResource IconButton}" Content="&#xE711;" Width="26" Height="26"
+                                Click="Pin_Click" ToolTip="Remove from your selection" VerticalAlignment="Top" />
+                    </Grid>
+                    <local:ChartControl Height="170" Margin="0,12,0,8" />
+                    <TextBlock Text="{Binding StatsText}" Style="{StaticResource Muted}" TextWrapping="NoWrap" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <DockPanel Margin="28,24,28,20">
+        <!-- header -->
+        <Grid DockPanel.Dock="Top" Margin="0,0,0,14">
+            <StackPanel>
+                <TextBlock Text="History" Style="{StaticResource H1}" />
+                <TextBlock Text="Graphs of the last hour, sampled once per second. Hover a graph for exact values."
+                           Style="{StaticResource Muted}" Margin="0,4,0,0" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <Border Style="{StaticResource SegmentHost}">
+                    <StackPanel x:Name="RangeButtons" Orientation="Horizontal">
+                        <RadioButton Style="{StaticResource Segment}" Content="1 min" Tag="1" GroupName="Range" Checked="Range_Checked" />
+                        <RadioButton Style="{StaticResource Segment}" Content="5 min" Tag="5" GroupName="Range" Checked="Range_Checked" />
+                        <RadioButton Style="{StaticResource Segment}" Content="15 min" Tag="15" GroupName="Range" Checked="Range_Checked" />
+                        <RadioButton Style="{StaticResource Segment}" Content="1 hour" Tag="60" GroupName="Range" Checked="Range_Checked" />
+                    </StackPanel>
+                </Border>
+                <Button x:Name="RecordButton" Margin="10,0,0,0" Click="Record_Click" ToolTip="Save the graphs you're viewing to a CSV file" AutomationProperties.Name="Record CSV">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="10" Height="10" Fill="{DynamicResource HotBrush}" Margin="0,0,8,0" />
+                        <TextBlock x:Name="RecordText" Text="Record CSV" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- recording status -->
+        <Border x:Name="RecordingBar" DockPanel.Dock="Top" Background="{DynamicResource AccentSoftBrush}" CornerRadius="10"
+                Padding="14,8" Margin="0,0,0,12" Visibility="Collapsed">
+            <Grid>
+                <TextBlock x:Name="RecordingText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,200,0" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Style="{StaticResource GhostButton}" Padding="10,4" Content="Open folder" Click="OpenLogFolder_Click" />
+                    <Button Style="{StaticResource GhostButton}" Padding="10,4" Content="Stop" Click="Record_Click" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- what to show -->
+        <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+            <Border Style="{StaticResource SegmentHost}" HorizontalAlignment="Left" VerticalAlignment="Top">
+                <StackPanel Orientation="Horizontal">
+                    <RadioButton x:Name="ModeAll" Style="{StaticResource Segment}" Content="All" GroupName="Mode" Checked="Mode_Checked" />
+                    <RadioButton x:Name="ModeCategory" Style="{StaticResource Segment}" Content="Categories" GroupName="Mode" Checked="Mode_Checked" />
+                    <RadioButton x:Name="ModeSelected" Style="{StaticResource Segment}" Content="Selected" GroupName="Mode" Checked="Mode_Checked" />
+                </StackPanel>
+            </Border>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+                <TextBox x:Name="SearchBox" Width="220" Tag="Filter graphs…" TextChanged="SearchBox_TextChanged" />
+                <Button x:Name="ChooseButton" Margin="8,0,0,0" Click="Choose_Click" Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE710;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,8,0" />
+                        <TextBlock Text="Choose sensors" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <StackPanel x:Name="CategoryPanel" DockPanel.Dock="Top" Margin="0,0,0,8" Visibility="Collapsed">
+            <WrapPanel x:Name="HardwareChips" />
+            <WrapPanel x:Name="TypeChips" />
+        </StackPanel>
+
+        <Grid>
+            <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="Charts" ItemsPanel="{StaticResource CardPanel}" ItemTemplate="{StaticResource SmallCard}" />
+            </ScrollViewer>
+            <TextBlock x:Name="EmptyText" Style="{StaticResource Muted}" FontSize="14" HorizontalAlignment="Center"
+                       VerticalAlignment="Center" TextAlignment="Center" Visibility="Collapsed" />
+        </Grid>
+    </DockPanel>
+</UserControl>
