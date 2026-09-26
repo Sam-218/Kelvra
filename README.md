@@ -76,7 +76,6 @@ Services/    sensor polling, history, alerts, CSV logging, overlays, processes, 
 Views/       WPF pages and windows (one page per sidebar entry)
 Themes/      dark/light colours and control styles
 Assets/      app icon
-scripts/     code-signing helper
 ```
 
 Settings are stored in `%APPDATA%\Kelvra\settings.json`; CSV logs go to `Documents\Kelvra Logs`.

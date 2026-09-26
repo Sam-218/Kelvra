@@ -174,12 +174,23 @@
                             <StackPanel>
                                 <Grid Margin="0,0,0,10">
                                     <TextBlock Text="Sensors" Style="{StaticResource H2}" Margin="0" VerticalAlignment="Center" />
-                                    <Button Style="{StaticResource AccentButton}" HorizontalAlignment="Right" Click="AddSensors_Click">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="&#xE710;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,8,0" />
-                                            <TextBlock Text="Add sensors" />
-                                        </StackPanel>
-                                    </Button>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                        <!-- Type a place, get a clock for its time zone (summer/winter time included) -->
+                                        <TextBox x:Name="PlaceBox" Width="190" Tag="Clock for a place, e.g. Minnesota" KeyDown="PlaceBox_KeyDown"
+                                                 ToolTip="Type a country, state or city and press Enter to add its local time" />
+                                        <Button Click="AddPlace_Click" Margin="6,0,8,0" ToolTip="Add a clock for this place">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="&#xE823;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,8,0" />
+                                                <TextBlock Text="Add clock" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Style="{StaticResource AccentButton}" Click="AddSensors_Click">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="&#xE710;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,8,0" />
+                                                <TextBlock Text="Add sensors" />
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
                                 </Grid>
                                 <TextBlock x:Name="NoItemsText" Text="No sensors yet. Click “Add sensors”, or use the + button on the Sensors page."
                                            Style="{StaticResource Muted}" Margin="0,4" />
@@ -232,6 +243,7 @@
                                     </StackPanel>
                                 </CheckBox>
                                 <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding ShowHeaders}" Content="Show hardware headers" />
+                                <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding ClockSeconds}" Content="Show seconds on time zone clocks" />
                                 <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding WarnColors}">
                                     <StackPanel>
                                         <TextBlock Text="Warning colours" />

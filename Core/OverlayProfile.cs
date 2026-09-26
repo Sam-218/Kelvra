@@ -35,6 +35,7 @@ public sealed class OverlayProfile : ObservableObject
     private bool _enabled = true;
     private bool _locked = true;
     private double _x = 20, _y = 20;
+    private double _width, _height;
     private double _fontSize = 13;
     private string _fontFamily = "Segoe UI";
     private int _backgroundOpacity = 75;
@@ -46,6 +47,7 @@ public sealed class OverlayProfile : ObservableObject
     private OverlayLayout _layout = OverlayLayout.Vertical;
     private bool _showHeaders = true;
     private bool _warnColors = true;
+    private bool _clockSeconds;
     private ObservableCollection<OverlayItem> _items = new();
 
     public OverlayProfile() => HookItems(_items);
@@ -59,6 +61,9 @@ public sealed class OverlayProfile : ObservableObject
     public bool Locked { get => _locked; set => Set(ref _locked, value); }
     public double X { get => _x; set => Set(ref _x, value); }
     public double Y { get => _y; set => Set(ref _y, value); }
+    /// <summary>User-dragged size; 0 = fit to content.</summary>
+    public double Width { get => _width; set => Set(ref _width, Math.Max(0, value)); }
+    public double Height { get => _height; set => Set(ref _height, Math.Max(0, value)); }
     public double FontSize { get => _fontSize; set => Set(ref _fontSize, Math.Clamp(value, 8, 32)); }
     public string FontFamily { get => _fontFamily; set => Set(ref _fontFamily, value); }
     public int BackgroundOpacity { get => _backgroundOpacity; set => Set(ref _backgroundOpacity, Math.Clamp(value, 0, 100)); }
@@ -70,6 +75,8 @@ public sealed class OverlayProfile : ObservableObject
     public OverlayLayout Layout { get => _layout; set => Set(ref _layout, value); }
     public bool ShowHeaders { get => _showHeaders; set => Set(ref _showHeaders, value); }
     public bool WarnColors { get => _warnColors; set => Set(ref _warnColors, value); }
+    /// <summary>Time zone clocks show seconds too.</summary>
+    public bool ClockSeconds { get => _clockSeconds; set => Set(ref _clockSeconds, value); }
 
     public ObservableCollection<OverlayItem> Items
     {
@@ -96,6 +103,8 @@ public sealed class OverlayProfile : ObservableObject
             Locked = Locked,
             X = X + 30,
             Y = Y + 30,
+            Width = Width,
+            Height = Height,
             FontSize = FontSize,
             FontFamily = FontFamily,
             BackgroundOpacity = BackgroundOpacity,
@@ -107,6 +116,7 @@ public sealed class OverlayProfile : ObservableObject
             Layout = Layout,
             ShowHeaders = ShowHeaders,
             WarnColors = WarnColors,
+            ClockSeconds = ClockSeconds,
             Items = new ObservableCollection<OverlayItem>(Items.Select(i => new OverlayItem
             {
                 SensorId = i.SensorId, Label = i.Label, ShowBar = i.ShowBar,
@@ -147,4 +157,64 @@ public sealed class OverlayProfile : ObservableObject
         if (e.PropertyName is nameof(OverlayItem.SensorName) or nameof(OverlayItem.HardwareName)) return;
         Changed?.Invoke(this, nameof(Items));
     }
+}
+
+/// <summary>
+/// Non-sensor things an overlay can show (clock, date, other time zones, …).
+/// Stored as items with an "extra:" id; time zones are "extra:tz:&lt;Windows time zone id&gt;".
+/// </summary>
+public static class OverlayExtras
+{
+    public const string Group = "Clock & system";
+    public const string ZoneGroup = "Time zones";
+    private const string ZonePrefix = "extra:tz:";
+
+    public static readonly (string Id, string Name)[] All =
+    {
+        ("extra:time", "Time"),
+        ("extra:timesec", "Time (seconds)"),
+        ("extra:date", "Date"),
+        ("extra:day", "Weekday"),
+        ("extra:uptime", "Uptime"),
+    };
+
+    /// <summary>Default overlay label, or null if the id isn't an extra.</summary>
+    public static string? NameOf(string id) =>
+        id.StartsWith(ZonePrefix) ? id[ZonePrefix.Length..].Replace(" Standard Time", "")
+        : All.FirstOrDefault(e => e.Id == id).Name;
+
+    public static string GroupOf(string id) => id.StartsWith(ZonePrefix) ? ZoneGroup : Group;
+
+    public static string ZoneId(string windowsZoneId) => ZonePrefix + windowsZoneId;
+
+    public static string Text(string id, bool zoneSeconds = false)
+    {
+        var now = DateTime.Now;
+        var up = TimeSpan.FromMilliseconds(Environment.TickCount64);
+        if (id.StartsWith(ZonePrefix))
+        {
+            try
+            {
+                return TimeZoneInfo.ConvertTime(now, TimeZoneInfo.FindSystemTimeZoneById(id[ZonePrefix.Length..])).ToString(zoneSeconds ? "T" : "t");
+            }
+            catch (TimeZoneNotFoundException)
+            {
+                return "-";
+            }
+        }
+        return id switch
+        {
+            "extra:time" => now.ToString("t"),
+            "extra:timesec" => now.ToString("T"),
+            "extra:date" => now.ToString("d"),
+            "extra:day" => now.ToString("dddd"),
+            "extra:uptime" => up.TotalDays >= 1 ? $"{(int)up.TotalDays}d {up.Hours}h {up.Minutes}m" : $"{up.Hours}h {up.Minutes}m",
+            _ => "-",
+        };
+    }
+
+    /// <summary>Stand-in sensors so the sensor picker can list the clock extras (time zones are added by place name instead).</summary>
+    public static List<SensorVm> PickerItems() => All.Select(e => new SensorVm(
+        new SensorReading(e.Id, "extra", Group, LibreHardwareMonitor.Hardware.HardwareType.Motherboard, e.Name,
+                          LibreHardwareMonitor.Hardware.SensorType.Factor, null, null, null), Group)).ToList();
 }

@@ -23,9 +23,9 @@ public static class SystemInfo
             Graphics(),
             Memory(),
             Motherboard(),
-            Storage(sensors),
-            Network(),
         };
+        sections.AddRange(Storage(sensors));
+        sections.Add(Network());
         return sections.Where(s => s.Lines.Count > 0).ToList();
     }
 
@@ -130,14 +130,15 @@ public static class SystemInfo
         return new("Motherboard", "", lines);
     }
 
-    private static InfoSection Storage(IReadOnlyList<SensorVm> sensors)
+    /// <summary>One section per physical drive.</summary>
+    private static IEnumerable<InfoSection> Storage(IReadOnlyList<SensorVm> sensors)
     {
-        var lines = new List<InfoLine>();
         foreach (var d in Query("SELECT Model, Size, InterfaceType, MediaType FROM Win32_DiskDrive"))
         {
+            var lines = new List<InfoLine>();
             string model = Str(d, "Model");
             long size = d["Size"] is ulong s ? (long)s : 0;
-            lines.Add(new("Drive", $"{model} · {ByteFormat.Format(size)}"));
+            lines.Add(new("Capacity", ByteFormat.Format(size)));
 
             // Health values come from the live sensors (SMART), matched by model name
             var health = sensors.Where(x => x.HardwareType == HardwareType.Storage &&
@@ -146,9 +147,9 @@ public static class SystemInfo
                                 .Where(x => x.Type is SensorType.Temperature or SensorType.Level or SensorType.Data)
                                 .Where(x => !x.Name.Contains("Threshold"))
                                 .GroupBy(x => x.Name).Select(g => g.First());
-            foreach (var h in health) lines.Add(new($"  {h.Name}", h.ValueText));
+            foreach (var h in health) lines.Add(new(h.Name, h.ValueText));
+            yield return new(model, "", lines);
         }
-        return new("Storage", "", lines);
     }
 
     private static InfoSection Network()

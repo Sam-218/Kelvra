@@ -9,6 +9,13 @@
                 <TextBlock x:Name="Subtitle" Text="A summary of your PC's hardware and Windows." Style="{StaticResource Muted}" Margin="0,4,0,0" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <Button x:Name="ResetOrderButton" Style="{StaticResource GhostButton}" Padding="10,5" Click="ResetOrder_Click" Margin="0,0,8,0"
+                        ToolTip="Put the cards back in their original order" AutomationProperties.Name="Reset order" Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE72C;" Style="{StaticResource Icon}" FontSize="11" Margin="0,0,6,0" />
+                        <TextBlock Text="Reset order" FontSize="12" />
+                    </StackPanel>
+                </Button>
                 <Button Click="Refresh_Click" Margin="0,0,8,0">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE72C;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,8,0" />
@@ -29,20 +36,26 @@
                 <ItemsControl x:Name="Sections">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
-                            <WrapPanel />
+                            <local:MasonryPanel />
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type local:InfoSection}">
-                            <Border Style="{StaticResource Card}" Width="400" Margin="0,0,12,12" VerticalAlignment="Top">
+                            <Border Style="{StaticResource Card}" Margin="0,0,12,12" VerticalAlignment="Top"
+                                    AllowDrop="True" PreviewDragOver="Card_DragOver" DragLeave="Card_DragLeave" PreviewDrop="Card_Drop">
                                 <StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                    <!-- The header is the drag handle; the values below stay selectable -->
+                                    <DockPanel Margin="0,0,0,12" Background="Transparent" Cursor="SizeAll" ToolTip="Drag onto another card to move it there"
+                                               PreviewMouseLeftButtonDown="Grip_MouseDown" MouseMove="Grip_MouseMove">
+                                        <TextBlock DockPanel.Dock="Right" Text="&#xE700;" Style="{StaticResource Icon}" FontSize="13"
+                                                   VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}" />
                                         <Border Width="32" Height="32" CornerRadius="8" Background="{DynamicResource AccentSoftBrush}">
                                             <TextBlock Text="{Binding Icon}" Style="{StaticResource Icon}" FontSize="15" HorizontalAlignment="Center"
                                                        Foreground="{DynamicResource AccentBrush}" />
                                         </Border>
-                                        <TextBlock Text="{Binding Title}" Style="{StaticResource H2}" Margin="12,0,0,0" VerticalAlignment="Center" />
-                                    </StackPanel>
+                                        <TextBlock Text="{Binding Title}" Style="{StaticResource H2}" Margin="12,0,0,0" VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding Title}" />
+                                    </DockPanel>
                                     <ItemsControl ItemsSource="{Binding Lines}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate DataType="{x:Type local:InfoLine}">

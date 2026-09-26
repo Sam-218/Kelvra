@@ -51,6 +51,8 @@ public sealed class AppSettings
     public List<string> CollapsedGroups { get; set; } = new();
     /// <summary>User-chosen device order (hardware IDs). Devices not listed follow in detection order.</summary>
     public List<string> GroupOrder { get; set; } = new();
+    /// <summary>User-chosen System page card order (card titles). Cards not listed follow in default order.</summary>
+    public List<string> SystemCardOrder { get; set; } = new();
     /// <summary>null = default order; otherwise "Name", "TypeLabel", "Value", "Min" or "Max".</summary>
     public string? SensorSortKey { get; set; }
     public bool SensorSortDescending { get; set; }

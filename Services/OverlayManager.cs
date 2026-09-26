@@ -88,7 +88,12 @@ public sealed class OverlayManager
 
     public void Resolve(OverlayItem item)
     {
-        if (_store.ById.TryGetValue(item.SensorId, out var s))
+        if (OverlayExtras.NameOf(item.SensorId) is string extra)
+        {
+            item.SensorName = extra;
+            item.HardwareName = OverlayExtras.GroupOf(item.SensorId);
+        }
+        else if (_store.ById.TryGetValue(item.SensorId, out var s))
         {
             item.SensorName = s.OverlayLabel;
             item.HardwareName = s.GroupName;

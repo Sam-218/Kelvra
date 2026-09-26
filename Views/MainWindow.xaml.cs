@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Security.Principal;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
@@ -251,13 +252,35 @@ public partial class MainWindow : Window
     private void AddSensors_Click(object sender, RoutedEventArgs e)
     {
         if (_selected == null) return;
-        var picker = new SensorPickerWindow(_app.Sensors.All, _selected) { Owner = this };
+        var extras = OverlayExtras.PickerItems();
+        var picker = new SensorPickerWindow(extras.Concat(_app.Sensors.All), _selected) { Owner = this };
         if (picker.ShowDialog() != true) return;
 
         foreach (var id in picker.SelectedIds)
-            if (_app.Sensors.ById.TryGetValue(id, out var s)) AddItem(_selected, s);
+            if (_app.Sensors.ById.TryGetValue(id, out var s) || (s = extras.Find(x => x.Id == id)) != null) AddItem(_selected, s);
         if (picker.SelectedIds.Count > 0)
             ShowToast($"Added {picker.SelectedIds.Count} sensor(s) to {_selected.Name}");
+    }
+
+    private void PlaceBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter) AddPlace_Click(sender, e);
+    }
+
+    private void AddPlace_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selected == null || PlaceBox.Text.Trim().Length == 0) return;
+        if (TimeZonePlaces.Find(PlaceBox.Text) is not var (zoneId, label))
+        {
+            ShowToast($"Couldn't find “{PlaceBox.Text.Trim()}”. Try its country or a big city nearby.");
+            return;
+        }
+        var item = new OverlayItem { SensorId = OverlayExtras.ZoneId(zoneId), Label = label };
+        _app.Overlays.Resolve(item);
+        _selected.Items.Add(item);
+        PlaceBox.Clear();
+        string zone = TimeZoneInfo.FindSystemTimeZoneById(zoneId).DisplayName;
+        ShowToast($"Added a clock for {label} · {zone}");
     }
 
     private void MoveUp_Click(object sender, RoutedEventArgs e) => MoveItem(sender, -1);

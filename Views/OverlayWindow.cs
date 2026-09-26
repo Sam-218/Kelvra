@@ -60,11 +60,19 @@ public sealed class OverlayWindow : Window
         {
             _hwnd = new WindowInteropHelper(this).Handle;
             SetExStyle(_hwnd, WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, true);
+            HwndSource.FromHwnd(_hwnd).AddHook(WndProc);
             ApplyLock();
         };
-        MouseLeftButtonDown += (_, _) =>
+        MouseLeftButtonDown += (_, e) =>
         {
-            if (!_p.Locked) DragMove();
+            if (_p.Locked) return;
+            if (e.ClickCount == 2)
+            {
+                // Double-click: back to fit-to-content
+                _p.Width = _p.Height = 0;
+                Rebuild();
+            }
+            else DragMove();
         };
         LocationChanged += (_, _) =>
         {
@@ -82,7 +90,8 @@ public sealed class OverlayWindow : Window
     {
         switch (property)
         {
-            case nameof(OverlayProfile.X) or nameof(OverlayProfile.Y) or nameof(OverlayProfile.Enabled):
+            case nameof(OverlayProfile.X) or nameof(OverlayProfile.Y) or nameof(OverlayProfile.Enabled)
+                or nameof(OverlayProfile.Width) or nameof(OverlayProfile.Height):
                 return;
             case nameof(OverlayProfile.Locked):
                 ApplyLock();
@@ -98,6 +107,48 @@ public sealed class OverlayWindow : Window
     {
         if (_hwnd != IntPtr.Zero) SetExStyle(_hwnd, WS_EX_TRANSPARENT, _p.Locked);
         Cursor = _p.Locked ? null : Cursors.SizeAll;
+        ResizeMode = _p.Locked ? ResizeMode.NoResize : ResizeMode.CanResize;
+    }
+
+    private const int WM_NCHITTEST = 0x0084, WM_SIZING = 0x0214, WM_EXITSIZEMOVE = 0x0232;
+    private bool _resizing;
+
+    /// <summary>Unlocked: the outer 8 px act as resize borders. After a resize the size is kept in the profile.</summary>
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        switch (msg)
+        {
+            case WM_NCHITTEST when !_p.Locked:
+                long lp = lParam.ToInt64();
+                var pt = PointFromScreen(new Point((short)(lp & 0xFFFF), (short)((lp >> 16) & 0xFFFF)));
+                const double edge = 8;
+                bool l = pt.X < edge, r = pt.X > ActualWidth - edge, t = pt.Y < edge, b = pt.Y > ActualHeight - edge;
+                int hit = (t, b, l, r) switch
+                {
+                    (true, _, true, _) => 13,  // HTTOPLEFT
+                    (true, _, _, true) => 14,  // HTTOPRIGHT
+                    (_, true, true, _) => 16,  // HTBOTTOMLEFT
+                    (_, true, _, true) => 17,  // HTBOTTOMRIGHT
+                    (true, _, _, _) => 12,     // HTTOP
+                    (_, true, _, _) => 15,     // HTBOTTOM
+                    (_, _, true, _) => 10,     // HTLEFT
+                    (_, _, _, true) => 11,     // HTRIGHT
+                    _ => 0,
+                };
+                if (hit == 0) break;
+                handled = true;
+                return new IntPtr(hit);
+            case WM_SIZING:
+                _resizing = true;
+                break;
+            case WM_EXITSIZEMOVE when _resizing:
+                _resizing = false;
+                SizeToContent = SizeToContent.Manual;
+                _p.Width = Math.Round(ActualWidth);
+                _p.Height = Math.Round(ActualHeight);
+                break;
+        }
+        return IntPtr.Zero;
     }
 
     // ---------- building ----------
@@ -134,30 +185,39 @@ public sealed class OverlayWindow : Window
         {
             panel.Children.Add(new TextBlock
             {
-                Text = $"✥ {_p.Name} — drag to move · Ctrl+Shift+L to lock",
+                Text = $"✥ {_p.Name} — drag to move · drag edges to resize · double-click to fit · Ctrl+Shift+L to lock",
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                ToolTip = "Drag to move · drag the edges to resize · double-click to fit the content · Ctrl+Shift+L to lock",
                 Foreground = accent,
                 FontSize = Math.Max(10, _p.FontSize - 2),
                 Margin = new Thickness(0, 0, 0, 6),
             });
         }
 
-        if (_p.Items.Count == 0)
-        {
-            panel.Children.Add(new TextBlock
-            {
-                Text = $"{_p.Name}: no sensors yet.\nAdd some in Kelvra → Overlays.",
-                Foreground = labelBrush,
-            });
-        }
-        else
-        {
-            panel.Children.Add(_p.Layout == OverlayLayout.Vertical
-                ? BuildVertical(labelBrush, accent)
-                : BuildHorizontal(labelBrush, accent));
-        }
+        UIElement content = _p.Items.Count == 0
+            ? new TextBlock { Text = $"{_p.Name}: no sensors yet.\nAdd some in Kelvra → Overlays.", Foreground = labelBrush }
+            : _p.Layout == OverlayLayout.Vertical ? BuildVertical(labelBrush, accent) : BuildHorizontal(labelBrush, accent);
+        panel.Children.Add(content);
 
         _root.Child = panel;
         UpdateValues();
+
+        // Can be dragged bigger than the content, never smaller (the hint line just trims)
+        content.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        MinWidth = content.DesiredSize.Width + _root.Padding.Left + _root.Padding.Right;
+        _root.Measure(new Size(MinWidth, double.PositiveInfinity));
+        MinHeight = _root.DesiredSize.Height;
+
+        if (_p.Width > 0 && _p.Height > 0)
+        {
+            SizeToContent = SizeToContent.Manual;
+            Width = _p.Width;
+            Height = _p.Height;
+        }
+        else
+        {
+            SizeToContent = SizeToContent.WidthAndHeight;
+        }
     }
 
     private UIElement BuildVertical(Brush labelBrush, Brush accent)
@@ -285,7 +345,8 @@ public sealed class OverlayWindow : Window
     }
 
     private string GroupOf(OverlayItem item) =>
-        _store.ById.TryGetValue(item.SensorId, out var s) ? s.GroupName : item.HardwareName;
+        OverlayExtras.NameOf(item.SensorId) != null ? OverlayExtras.GroupOf(item.SensorId)
+        : _store.ById.TryGetValue(item.SensorId, out var s) ? s.GroupName : item.HardwareName;
 
     // ---------- live values ----------
 
@@ -294,11 +355,12 @@ public sealed class OverlayWindow : Window
         foreach (var cell in _cells)
         {
             _store.ById.TryGetValue(cell.Item.SensorId, out var s);
+            string? extra = OverlayExtras.NameOf(cell.Item.SensorId);
 
-            string label = cell.Item.Label ?? s?.OverlayLabel ?? (_store.Loaded ? "?" : "…");
+            string label = cell.Item.Label ?? s?.OverlayLabel ?? extra ?? (_store.Loaded ? "?" : "…");
             if (cell.Label.Text != label) cell.Label.Text = label;
 
-            string value = s?.ValueText ?? "-";
+            string value = extra != null ? OverlayExtras.Text(cell.Item.SensorId, _p.ClockSeconds) : s?.ValueText ?? "-";
             if (cell.Value.Text != value) cell.Value.Text = value;
 
             var brush = !_p.WarnColors || s == null ? _valueBrush
