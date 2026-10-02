@@ -172,9 +172,16 @@ public static class SensorFormat
             SensorType.Frequency => $"{v.ToString("0", Inv)} Hz",
             SensorType.Energy => $"{v.ToString("0", Inv)} mWh",
             SensorType.Noise => $"{v.ToString("0", Inv)} dBA",
-            SensorType.TimeSpan => TimeSpan.FromSeconds(v).ToString(@"hh\:mm\:ss"),
+            SensorType.TimeSpan => Duration(v),
             _ => v.ToString("0.##", Inv),
         };
+    }
+
+    /// <summary>"h:mm:ss" with total hours, so 25 h reads "25:00:00" (the "hh" format wraps at a day). No sign, as before.</summary>
+    private static string Duration(float seconds)
+    {
+        var t = TimeSpan.FromSeconds(seconds).Duration();
+        return string.Create(Inv, $"{(long)t.TotalHours:00}:{t.Minutes:00}:{t.Seconds:00}");
     }
 
     private static string Throughput(float bytesPerSec)

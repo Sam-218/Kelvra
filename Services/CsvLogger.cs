@@ -78,9 +78,11 @@ public sealed class CsvLogger : IDisposable
         StateChanged?.Invoke();
     }
 
-    /// <summary>RFC 4180 quoting: wrap in quotes and double inner quotes when the text has a comma, quote or newline.</summary>
+    /// <summary>RFC 4180 quoting: wrap in quotes and double inner quotes when the text has a comma, quote, CR or LF.</summary>
     private static string Escape(string s) =>
-        s.IndexOfAny(new[] { ',', '"', '\n' }) >= 0 ? "\"" + s.Replace("\"", "\"\"") + "\"" : s;
+        s.IndexOfAny(CsvSpecial) >= 0 ? "\"" + s.Replace("\"", "\"\"") + "\"" : s;
+
+    private static readonly char[] CsvSpecial = { ',', '"', '\n', '\r' };
 
     public void Dispose() => Stop();
 }
