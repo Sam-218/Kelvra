@@ -207,9 +207,9 @@
                                                         <ColumnDefinition Width="Auto" />
                                                     </Grid.ColumnDefinitions>
                                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                        <Button Style="{StaticResource IconButton}" Content="&#xE70E;" Width="26" Height="26"
+                                                        <Button Style="{StaticResource IconButton}" AutomationProperties.Name="Move sensor up" Content="&#xE70E;" Width="26" Height="26"
                                                                 Click="MoveUp_Click" ToolTip="Move up" />
-                                                        <Button Style="{StaticResource IconButton}" Content="&#xE70D;" Width="26" Height="26"
+                                                        <Button Style="{StaticResource IconButton}" AutomationProperties.Name="Move sensor down" Content="&#xE70D;" Width="26" Height="26"
                                                                 Click="MoveDown_Click" ToolTip="Move down" />
                                                     </StackPanel>
                                                     <StackPanel Grid.Column="1" Margin="10,0" VerticalAlignment="Center">
@@ -221,7 +221,7 @@
                                                              Tag="Custom label" VerticalAlignment="Center" />
                                                     <CheckBox Grid.Column="3" Content="Bar" IsChecked="{Binding ShowBar}" Margin="14,0,6,0"
                                                               VerticalAlignment="Center" ToolTip="Show a progress bar under the value" />
-                                                    <Button Grid.Column="4" Style="{StaticResource IconButton}" Content="&#xE711;"
+                                                    <Button Grid.Column="4" Style="{StaticResource IconButton}" AutomationProperties.Name="Remove sensor from overlay" Content="&#xE711;"
                                                             Click="RemoveItem_Click" ToolTip="Remove" />
                                                 </Grid>
                                             </Border>

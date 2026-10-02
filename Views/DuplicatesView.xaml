@@ -75,7 +75,7 @@
                                     <TextBlock Text="{Binding Folder}" Style="{StaticResource Muted}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
                                 <TextBlock Grid.Column="2" Text="{Binding ModifiedText}" Style="{StaticResource Muted}" VerticalAlignment="Center" />
-                                <Button Grid.Column="3" Style="{StaticResource IconButton}" Content="&#xE838;" Click="ShowFile_Click" ToolTip="Show in Explorer" />
+                                <Button Grid.Column="3" Style="{StaticResource IconButton}" AutomationProperties.Name="Show in Explorer" Content="&#xE838;" Click="ShowFile_Click" ToolTip="Show in Explorer" />
                             </Grid>
                         </DataTemplate>
                     </ListView.Resources>

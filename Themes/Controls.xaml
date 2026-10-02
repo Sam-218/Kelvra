@@ -80,7 +80,7 @@
     </Style>
     <Style TargetType="Button" BasedOn="{StaticResource BaseButton}" />
     <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
-        <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="Background" Value="{DynamicResource AccentFillBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
         <Setter Property="BorderThickness" Value="0" />
     </Style>
@@ -151,7 +151,7 @@
                             <Setter TargetName="Bg" Property="Background" Value="{DynamicResource HoverBrush}" />
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="Bg" Property="Background" Value="{DynamicResource AccentBrush}" />
+                            <Setter TargetName="Bg" Property="Background" Value="{DynamicResource AccentFillBrush}" />
                             <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -224,8 +224,8 @@
                     </StackPanel>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="Box" Property="Background" Value="{DynamicResource AccentBrush}" />
-                            <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                            <Setter TargetName="Box" Property="Background" Value="{DynamicResource AccentFillBrush}" />
+                            <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource AccentFillBrush}" />
                             <Setter TargetName="Tick" Property="Visibility" Value="Visible" />
                         </Trigger>
                     </ControlTemplate.Triggers>

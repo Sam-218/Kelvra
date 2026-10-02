@@ -10,6 +10,8 @@
     <SolidColorBrush x:Key="MutedBrush" Color="#8B92A1" />
     <SolidColorBrush x:Key="AccentBrush" Color="#3B82F6" />
     <SolidColorBrush x:Key="AccentSoftBrush" Color="#263B82F6" />
+    <!-- Fill behind white text (buttons, checked chips): darker than AccentBrush so white text reaches 4.5:1 -->
+    <SolidColorBrush x:Key="AccentFillBrush" Color="#2563EB" />
     <SolidColorBrush x:Key="AccentTextBrush" Color="#FFFFFF" />
     <SolidColorBrush x:Key="HoverBrush" Color="#12FFFFFF" />
     <SolidColorBrush x:Key="PressedBrush" Color="#20FFFFFF" />

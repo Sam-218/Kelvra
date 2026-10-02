@@ -23,7 +23,7 @@
                         </StackPanel>
                         <TextBlock Grid.Column="1" Text="{Binding Sensor.ValueText}" FontSize="16" FontWeight="SemiBold"
                                    Foreground="{Binding Brush}" VerticalAlignment="Center" Margin="8,0,4,0" />
-                        <Button x:Name="Pin" Grid.Column="2" Style="{StaticResource IconButton}" Content="&#xE734;" Width="26" Height="26"
+                        <Button x:Name="Pin" Grid.Column="2" Style="{StaticResource IconButton}" AutomationProperties.Name="Add to your selection" Content="&#xE734;" Width="26" Height="26"
                                 Click="Pin_Click" ToolTip="Add to your selection" VerticalAlignment="Top" />
                     </Grid>
                     <local:ChartControl Height="86" Margin="0,10,0,6" />
@@ -35,6 +35,7 @@
                     <Setter TargetName="Pin" Property="Content" Value="&#xE735;" />
                     <Setter TargetName="Pin" Property="Foreground" Value="{DynamicResource WarnBrush}" />
                     <Setter TargetName="Pin" Property="ToolTip" Value="Remove from your selection" />
+                    <Setter TargetName="Pin" Property="AutomationProperties.Name" Value="Remove from your selection" />
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
@@ -55,7 +56,7 @@
                         </StackPanel>
                         <TextBlock Grid.Column="1" Text="{Binding Sensor.ValueText}" FontSize="22" FontWeight="SemiBold"
                                    Foreground="{Binding Brush}" VerticalAlignment="Center" Margin="8,0,6,0" />
-                        <Button Grid.Column="2" Style="{StaticResource IconButton}" Content="&#xE711;" Width="26" Height="26"
+                        <Button Grid.Column="2" Style="{StaticResource IconButton}" AutomationProperties.Name="Remove from your selection" Content="&#xE711;" Width="26" Height="26"
                                 Click="Pin_Click" ToolTip="Remove from your selection" VerticalAlignment="Top" />
                     </Grid>
                     <local:ChartControl Height="170" Margin="0,12,0,8" />

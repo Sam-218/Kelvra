@@ -58,7 +58,7 @@
                                 <TextBlock Text="{Binding SizeText}" FontSize="15" FontWeight="SemiBold" HorizontalAlignment="Right" />
                                 <TextBlock Text="{Binding Status}" Style="{StaticResource Muted}" HorizontalAlignment="Right" />
                             </StackPanel>
-                            <Button Grid.Column="4" Style="{StaticResource IconButton}" Content="&#xE838;" Margin="10,0,0,0"
+                            <Button Grid.Column="4" Style="{StaticResource IconButton}" AutomationProperties.Name="Open folder" Content="&#xE838;" Margin="10,0,0,0"
                                     Click="OpenFolder_Click" ToolTip="Open folder" />
                         </Grid>
                     </DataTemplate>

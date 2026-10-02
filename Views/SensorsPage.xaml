@@ -162,7 +162,7 @@
                                                HorizontalAlignment="Right" VerticalAlignment="Center" />
                                     <TextBlock Grid.Column="4" Text="{Binding MaxText}" Foreground="{DynamicResource MutedBrush}"
                                                HorizontalAlignment="Right" VerticalAlignment="Center" />
-                                    <Button Grid.Column="5" Style="{StaticResource IconButton}" Content="&#xE710;" HorizontalAlignment="Right"
+                                    <Button Grid.Column="5" Style="{StaticResource IconButton}" AutomationProperties.Name="Add to the selected overlay" Content="&#xE710;" HorizontalAlignment="Right"
                                             Width="26" Height="26" Click="AddSensor_Click" ToolTip="Add to the selected overlay" />
                                 </Grid>
                                 <DataTemplate.Triggers>
