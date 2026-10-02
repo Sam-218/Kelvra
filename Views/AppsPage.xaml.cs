@@ -152,6 +152,14 @@ public partial class AppsPage : UserControl
 
     private void EndTask(ProcessRow row)
     {
+        if (ProcessGuard.IsCritical(row.Pid, row.Name, row.Path))
+        {
+            MessageBox.Show(Window.GetWindow(this),
+                $"“{row.DisplayName}” ({row.Name}, PID {row.Pid}) is a critical Windows process. Ending it would crash Windows " +
+                "(blue screen) or sign everyone out, so Kelvra won't do it.",
+                "End task", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
         var answer = MessageBox.Show(Window.GetWindow(this),
             $"End “{row.DisplayName}” ({row.Name}.exe, PID {row.Pid})?\n\nUnsaved work in that app will be lost.",
             "End task", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);

@@ -438,6 +438,9 @@
                                     <TextBlock Text="Starts in the tray when you sign in (with admin rights, no UAC prompt)." Style="{StaticResource Muted}" />
                                 </StackPanel>
                             </CheckBox>
+                            <TextBlock x:Name="AutostartWarning" Visibility="Collapsed" TextWrapping="Wrap" Margin="0,4,0,8"
+                                       Foreground="{DynamicResource HotBrush}"
+                                       Text="⚠ Kelvra.exe is in a folder other programs can change, so the sign-in task isn't updated anymore. Move Kelvra.exe to C:\Program Files\Kelvra and start it from there." />
                             <CheckBox x:Name="StartMinimizedSwitch" Style="{StaticResource Switch}" Content="Start minimized to the tray"
                                       Checked="BehaviourSwitch_Changed" Unchecked="BehaviourSwitch_Changed" />
                             <CheckBox x:Name="CloseToTraySwitch" Style="{StaticResource Switch}" Content="Close button keeps Kelvra running in the tray"

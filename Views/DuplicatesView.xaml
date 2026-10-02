@@ -19,7 +19,8 @@
                             <RadioButton Style="{StaticResource Segment}" Content="100 MB" Tag="100" GroupName="DupSize" Checked="Size_Checked" />
                         </StackPanel>
                     </Border>
-                    <CheckBox x:Name="SkipWindows" Content="Skip Windows folder" IsChecked="True" VerticalAlignment="Center" Margin="0,0,12,0" />
+                    <CheckBox x:Name="SkipWindows" Content="Skip system folders" IsChecked="True" VerticalAlignment="Center" Margin="0,0,12,0"
+                              ToolTip="Leaves out Windows, Program Files and ProgramData. Programs there often need their own copy of a file." />
                     <Button x:Name="FindButton" Style="{StaticResource AccentButton}" Content="Find duplicates" Click="Find_Click" />
                 </StackPanel>
             </Grid>

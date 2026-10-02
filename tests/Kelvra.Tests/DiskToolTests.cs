@@ -63,7 +63,7 @@ public class DiskToolTests
         }
         var root = new DiskScanner().Scan(dir.Path, CancellationToken.None).Root;
 
-        var groups = new DuplicateFinder().Find(root, 0, skipWindows: true, CancellationToken.None);
+        var groups = new DuplicateFinder().Find(root, 0, skipSystemFolders: true, CancellationToken.None);
 
         Assert.Equal(sizes.Length, groups.Count);
         foreach (var g in groups)

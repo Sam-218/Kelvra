@@ -1,5 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Reflection;
+using System.Security.Cryptography;
 using Microsoft.Win32;
 
 namespace Kelvra;
@@ -49,22 +51,23 @@ public static class PawnIoInstaller
     /// <summary>Runs the bundled installer and waits for it. Returns true if PawnIO is installed afterwards.</summary>
     public static async Task<bool> InstallAsync()
     {
-        string dir = Path.Combine(Path.GetTempPath(), "Kelvra");
+        byte[] setup = ReadBundledInstaller();
+        // Admin-only folder + locked, re-checked file: no other program can swap the installer before it runs as admin
+        string dir = SecureFiles.CreatePrivateFolder();
         string path = Path.Combine(dir, "PawnIO_setup.exe");
 
         try
         {
-            Directory.CreateDirectory(dir);
-            using (var resource = typeof(PawnIoInstaller).Assembly.GetManifestResourceStream("PawnIO_setup.exe"))
+            Process? process;
+            using (var locked = SecureFiles.WriteAndLock(path, setup))
             {
-                if (resource == null) throw new InvalidOperationException("The PawnIO installer is missing from this build.");
-                using var file = new FileStream(path, FileMode.Create, FileAccess.Write);
-                await resource.CopyToAsync(file);
+                // UseShellExecute lets Windows show a UAC prompt if Kelvra itself isn't elevated.
+                process = Process.Start(new ProcessStartInfo(path, "-install") { UseShellExecute = true });
             }
-
-            // UseShellExecute lets Windows show a UAC prompt if Kelvra itself isn't elevated.
-            using var process = Process.Start(new ProcessStartInfo(path, "-install") { UseShellExecute = true });
-            if (process != null) await process.WaitForExitAsync();
+            using (process)
+            {
+                if (process != null) await process.WaitForExitAsync();
+            }
         }
         catch (Win32Exception)
         {
@@ -73,9 +76,25 @@ public static class PawnIoInstaller
         }
         finally
         {
-            try { File.Delete(path); } catch { /* still in use or already gone */ }
+            SecureFiles.DeleteQuietly(dir);
         }
 
         return !NeedsInstall;
+    }
+
+    /// <summary>The embedded installer, checked against the SHA-256 the build verified (see Kelvra.csproj).</summary>
+    internal static byte[] ReadBundledInstaller()
+    {
+        var assembly = typeof(PawnIoInstaller).Assembly;
+        using var resource = assembly.GetManifestResourceStream("PawnIO_setup.exe")
+                             ?? throw new InvalidOperationException("The PawnIO installer is missing from this build.");
+        using var buffer = new MemoryStream();
+        resource.CopyTo(buffer);
+        byte[] bytes = buffer.ToArray();
+
+        string? expected = assembly.GetCustomAttributes<AssemblyMetadataAttribute>().FirstOrDefault(a => a.Key == "PawnIOSha256")?.Value;
+        if (string.IsNullOrEmpty(expected) || !Convert.ToHexString(SHA256.HashData(bytes)).Equals(expected, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The bundled PawnIO installer failed its integrity check.");
+        return bytes;
     }
 }

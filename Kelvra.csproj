@@ -55,6 +55,11 @@
 
   <ItemGroup>
     <EmbeddedResource Include="$(PawnIOSetup)" LogicalName="PawnIO_setup.exe" />
+    <!-- Checked again at runtime, right before the extracted installer is started -->
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>PawnIOSha256</_Parameter1>
+      <_Parameter2>$(PawnIOSha256)</_Parameter2>
+    </AssemblyAttribute>
   </ItemGroup>
 
   <Target Name="DownloadPawnIO" BeforeTargets="PrepareForBuild">

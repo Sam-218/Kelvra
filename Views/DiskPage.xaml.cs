@@ -372,7 +372,12 @@ public partial class DiskPage : UserControl
             menu.Items.Add(MenuItem($"Zoom map into “{zoomTarget.Name}”", "\uE71E", () => Treemap.ViewRoot = zoomTarget));
         menu.Items.Add(new Separator());
         var recycle = MenuItem("Move to Recycle Bin…", "\uE74D", () => RecycleAsync(node));
-        recycle.IsEnabled = node.Parent != null;
+        if (node.Parent == null || SystemPaths.IsProtected(node.FullPath))
+        {
+            recycle.IsEnabled = false;
+            recycle.ToolTip = node.Parent == null ? "This is the folder you scanned." : SystemPaths.ProtectedReason;
+            ToolTipService.SetShowOnDisabled(recycle, true);
+        }
         menu.Items.Add(recycle);
         menu.IsOpen = true;
     }
@@ -404,6 +409,13 @@ public partial class DiskPage : UserControl
     private async void RecycleAsync(DiskNode node)
     {
         if (node.Parent == null) return;
+        // Also reached by the Delete key, so the menu's disabled state alone isn't enough
+        if (SystemPaths.IsProtected(node.FullPath))
+        {
+            MessageBox.Show(Window.GetWindow(this), $"Kelvra won't move “{node.Name}” to the Recycle Bin.\n\n{SystemPaths.ProtectedReason}",
+                "Protected folder", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
         string what = node.IsDirectory ? $"the folder “{node.Name}” ({node.FileCount:N0} files, {ByteFormat.Format(node.Size)})"
                                        : $"“{node.Name}” ({ByteFormat.Format(node.Size)})";
         var answer = MessageBox.Show(Window.GetWindow(this),

@@ -58,10 +58,11 @@ public sealed class DuplicateFinder
     /// Searches an already scanned tree (sizes come from the scan, contents from disk). Runs for a while: call on a worker
     /// thread and poll <see cref="Stage"/>/<see cref="Done"/>/<see cref="Total"/> for progress. Biggest waste first.
     /// </summary>
-    public List<DuplicateGroup> Find(DiskNode root, long minSize, bool skipWindows, CancellationToken ct)
+    /// <param name="skipSystemFolders">Leave out Windows, Program Files and ProgramData, where identical files are normal and needed.</param>
+    public List<DuplicateGroup> Find(DiskNode root, long minSize, bool skipSystemFolders, CancellationToken ct)
     {
         _stage = "Collecting files…";
-        string windowsDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        var skipped = SystemPaths.DuplicateSkipFolders;
 
         // 1. same size
         var bySize = new Dictionary<long, List<DiskNode>>();
@@ -75,7 +76,7 @@ public sealed class DuplicateFinder
             {
                 if (c.IsDirectory)
                 {
-                    if (skipWindows && IsSkippedWindowsFolder(c, windowsDir)) continue;
+                    if (skipSystemFolders && IsSkippedFolder(c, skipped)) continue;
                     stack.Push(c);
                 }
                 else if (c.Size >= minSize)
@@ -116,12 +117,19 @@ public sealed class DuplicateFinder
     }
 
     /// <summary>
-    /// True only for the Windows folder itself. The name is compared first so the full path,
-    /// which allocates a string per folder level, is only built for folders actually called "Windows".
+    /// True only for one of <paramref name="folders"/> itself. Names are compared first so the full path, which
+    /// allocates a string per folder level, is only built for folders called e.g. "Windows" or "Program Files".
     /// </summary>
-    private static bool IsSkippedWindowsFolder(DiskNode dir, string windowsDir) =>
-        dir.Name.AsSpan().Equals(Path.GetFileName(windowsDir.AsSpan()), StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(dir.FullPath, windowsDir, StringComparison.OrdinalIgnoreCase);
+    internal static bool IsSkippedFolder(DiskNode dir, IReadOnlyList<string> folders)
+    {
+        foreach (string folder in folders)
+        {
+            if (dir.Name.AsSpan().Equals(Path.GetFileName(folder.AsSpan()), StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(dir.FullPath, folder, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
 
     private sealed record Hashed(DiskNode Node, string Hash, string FileId, DateTime Modified);
 

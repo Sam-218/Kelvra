@@ -57,7 +57,7 @@ public partial class DuplicatesView : UserControl
         var cts = _cts = new CancellationTokenSource();
         var finder = _finder = new DuplicateFinder();
         long minSize = _app.Settings.DuplicateMinSizeMb * 1024L * 1024L;
-        bool skipWindows = SkipWindows.IsChecked == true;
+        bool skipSystem = SkipWindows.IsChecked == true;
 
         _rows.Clear();
         EmptyText.Visibility = Visibility.Collapsed;
@@ -69,7 +69,7 @@ public partial class DuplicatesView : UserControl
 
         try
         {
-            _groups = await Task.Run(() => finder.Find(root, minSize, skipWindows, cts.Token));
+            _groups = await Task.Run(() => finder.Find(root, minSize, skipSystem, cts.Token));
             ShowGroups();
             Summary.Text = $"{_groups.Count:N0} sets of duplicates in {root.FullPath} · " +
                            $"{ByteFormat.Format(_groups.Sum(g => g.Wasted))} could be freed · took {(DateTime.Now - started).TotalSeconds:0} s";
@@ -147,6 +147,21 @@ public partial class DuplicatesView : UserControl
     {
         var selected = _groups.SelectMany(g => g.Files).Where(f => f.Selected).ToList();
         if (selected.Count == 0) return;
+
+        // Files inside Windows are never moved (possible when "Skip system folders" was turned off)
+        var system = selected.Where(f => SystemPaths.IsProtected(f.Path)).ToList();
+        if (system.Count > 0)
+        {
+            foreach (var f in system) f.Selected = false;
+            UpdateSelection();
+            MessageBox.Show(Window.GetWindow(this),
+                $"{system.Count:N0} selected file(s) are part of Windows and were unticked. Windows keeps identical copies on purpose.",
+                "Duplicates", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        int inPrograms = selected.Count(f => SystemPaths.DuplicateSkipFolders.Any(d => SystemPaths.IsSameOrInside(f.Path, d)));
+        string programsWarning = inPrograms == 0 ? ""
+            : $"\n\n⚠ {inPrograms:N0} of them are in Program Files or ProgramData. Programs there usually need their own copy and may stop working.";
         if (_groups.Any(g => g.Files.All(f => f.Selected)))
         {
             MessageBox.Show(Window.GetWindow(this), "In at least one set every copy is selected. Keep at least one copy of each file.",
@@ -155,7 +170,7 @@ public partial class DuplicatesView : UserControl
         }
         var answer = MessageBox.Show(Window.GetWindow(this),
             $"Move {selected.Count:N0} duplicate files ({ByteFormat.Format(selected.Sum(f => f.Node.Size))}) to the Recycle Bin?\n\n" +
-            "One copy of each file is kept. You can restore them from the Recycle Bin.",
+            "One copy of each file is kept. You can restore them from the Recycle Bin." + programsWarning,
             "Duplicates", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
         if (answer != MessageBoxResult.Yes) return;
 
