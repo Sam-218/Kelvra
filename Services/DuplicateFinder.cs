@@ -213,10 +213,9 @@ public sealed class DuplicateFinder
             ? $"{info.VolumeSerialNumber:X}-{info.FileIndexHigh:X}-{info.FileIndexLow:X}"
             : Guid.NewGuid().ToString();
 
-    // TODO(review): without Pack = 4 the longs are 8-byte aligned, so this struct is 56 bytes instead of the native 52 and every
-    // field after FileAttributes is read 4 bytes off (VolumeSerialNumber gets FileSizeHigh, FileIndexLow is never filled).
-    // Hard links on one volume are still told apart correctly; ids from different volumes could collide.
-    [StructLayout(LayoutKind.Sequential)]
+    // Pack = 4 matches the native layout (52 bytes): FILETIMEs are 4-byte aligned there. Without it the longs are
+    // 8-byte aligned and every field after FileAttributes is read 4 bytes off.
+    [StructLayout(LayoutKind.Sequential, Pack = 4)]
     private struct BY_HANDLE_FILE_INFORMATION
     {
         public uint FileAttributes;

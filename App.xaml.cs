@@ -66,6 +66,13 @@ public partial class App : Application
         bool startHidden = Settings.StartMinimized || e.Args.Contains(Autostart.MinimizedArg);
         if (!startHidden) MainView.Show();
 
+        if (Settings.RecoveredFrom is string broken)
+        {
+            string message = $"Your settings file couldn't be read, so Kelvra started with default settings.\nThe old file was kept as:\n{broken}";
+            if (startHidden) Tray.Notify("Kelvra settings were reset", message);
+            else MessageBox.Show(MainView, message, "Kelvra", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+
         // Keep the logon task pointing at this exe, in case it was moved. From a folder other programs can change
         // the task is left alone (never re-pointed there) and the user is told to move Kelvra.exe.
         if (Settings.StartWithWindows)

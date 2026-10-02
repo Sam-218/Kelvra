@@ -59,19 +59,84 @@ public sealed class AppSettings
     public bool SensorSortDescending { get; set; }
     public ObservableCollection<OverlayProfile> Overlays { get; set; } = new();
 
+    /// <summary>
+    /// Set when settings.json couldn't be read. The broken file was renamed to this path instead of being overwritten,
+    /// so overlays and alerts can still be rescued from it by hand.
+    /// </summary>
+    [JsonIgnore] public string? RecoveredFrom { get; private set; }
+
     public static AppSettings Load()
     {
         try
         {
             ImportFromOldName();
-            if (File.Exists(FilePath))
-                return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(FilePath), JsonOptions) ?? new AppSettings();
         }
-        catch
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Corrupt settings: fall back to defaults
+            // Old settings can't be copied: start fresh
         }
-        return new AppSettings();
+        return Load(FilePath);
+    }
+
+    internal static AppSettings Load(string path)
+    {
+        if (!File.Exists(path)) return new AppSettings();
+        try
+        {
+            var loaded = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), JsonOptions) ?? new AppSettings();
+            loaded.Repair();
+            return loaded;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new AppSettings(); // unreadable right now (locked?): not corrupt, so leave the file alone
+        }
+        catch (Exception)
+        {
+            // Corrupt settings: keep them aside (the next save would otherwise overwrite them) and start with defaults
+            var fresh = new AppSettings();
+            try
+            {
+                string backup = $"{path}.bad-{DateTime.Now:yyyyMMdd-HHmmss}";
+                File.Move(path, backup);
+                fresh.RecoveredFrom = backup;
+            }
+            catch (Exception moveError) when (moveError is IOException or UnauthorizedAccessException)
+            {
+                // Couldn't rename it either: defaults, as before
+            }
+            return fresh;
+        }
+    }
+
+    /// <summary>
+    /// Fixes values a hand-edited or old file could contain: a refresh outside the slider's range (a negative one used to
+    /// stop sensor polling, 0 polled non-stop), missing lists (JSON null), and history/log/size choices the UI doesn't offer.
+    /// </summary>
+    internal void Repair()
+    {
+        RefreshMs = Math.Clamp(RefreshMs, 250, 5000);
+        if (HistoryMinutes is not (1 or 5 or 15 or 60)) HistoryMinutes = 5;
+        if (LogIntervalSeconds is not (1 or 5 or 10 or 60)) LogIntervalSeconds = 1;
+        if (DuplicateMinSizeMb is not (1 or 10 or 100)) DuplicateMinSizeMb = 1;
+        Theme ??= "System";
+        HistoryMode ??= "Category";
+        HistoryCategory ??= "hw:CPU";
+        Alerts ??= new();
+        Overlays ??= new();
+        HistorySelected ??= new();
+        CleanupUnchecked ??= new();
+        CollapsedGroups ??= new();
+        GroupOrder ??= new();
+        SystemCardOrder ??= new();
+        RemoveNulls(Alerts);
+        RemoveNulls(Overlays);
+    }
+
+    private static void RemoveNulls<T>(ObservableCollection<T> list)
+    {
+        for (int i = list.Count - 1; i >= 0; i--)
+            if (list[i] is null) list.RemoveAt(i);
     }
 
     /// <summary>Kelvra used to be called SysMonitor: bring its settings over once.</summary>
@@ -83,15 +148,17 @@ public sealed class AppSettings
         File.Copy(old, FilePath);
     }
 
-    public void Save()
+    public void Save() => Save(FilePath);
+
+    internal void Save(string path)
     {
         try
         {
-            Directory.CreateDirectory(Dir);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             // Write a temp file, then swap it in: a crash mid-write can't leave a half-written settings.json
-            string tmp = FilePath + ".tmp";
+            string tmp = path + ".tmp";
             File.WriteAllText(tmp, JsonSerializer.Serialize(this, JsonOptions));
-            File.Move(tmp, FilePath, overwrite: true);
+            File.Move(tmp, path, overwrite: true);
         }
         catch
         {

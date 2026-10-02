@@ -11,8 +11,16 @@ public sealed class CsvLogger : IDisposable
 
     private StreamWriter? _writer;
     private List<SensorVm> _columns = new();
-    private int _intervalSeconds = 1;
-    private int _tick;
+    private TimeSpan _interval = TimeSpan.FromSeconds(1);
+    private DateTime _nextRow;
+
+    // Samples arrive about once a second but not exactly (>= 950 ms apart), so "due" allows half a second of slack
+    private static readonly TimeSpan Slack = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>Where new logs go (tests use a temp folder).</summary>
+    internal string Folder { get; init; } = DefaultFolder;
+    /// <summary>Current time (tests use a fake clock).</summary>
+    internal Func<DateTime> Clock { get; init; } = () => DateTime.Now;
 
     public bool IsRecording => _writer != null;
     public string? FilePath { get; private set; }
@@ -29,13 +37,13 @@ public sealed class CsvLogger : IDisposable
         _columns = sensors.ToList();
         if (_columns.Count == 0) throw new InvalidOperationException("Nothing to record – no sensors are shown.");
 
-        Directory.CreateDirectory(DefaultFolder);
-        FilePath = Path.Combine(DefaultFolder, $"Kelvra {DateTime.Now:yyyy-MM-dd HH-mm-ss}.csv");
+        Directory.CreateDirectory(Folder);
+        FilePath = Path.Combine(Folder, $"Kelvra {Clock():yyyy-MM-dd HH-mm-ss}.csv");
         _writer = new StreamWriter(FilePath, append: false, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true)) { AutoFlush = true };
-        _intervalSeconds = Math.Max(1, intervalSeconds);
-        _tick = 0;
+        _interval = TimeSpan.FromSeconds(Math.Max(1, intervalSeconds));
+        _nextRow = default;
         Rows = 0;
-        Started = DateTime.Now;
+        Started = Clock();
 
         var header = new StringBuilder("Time");
         foreach (var s in _columns)
@@ -48,10 +56,13 @@ public sealed class CsvLogger : IDisposable
     public void OnSample()
     {
         if (_writer == null) return;
-        // Counts history samples, not seconds: with a refresh rate slower than 1 s the rows are further apart than the interval says
-        if (_tick++ % _intervalSeconds != 0) return;
+        // Time-based, not "every n-th sample": with a refresh slower than 1 s the rows still come at the chosen interval
+        var now = Clock();
+        if (_nextRow != default && now + Slack < _nextRow) return;
+        _nextRow = (_nextRow == default ? now : _nextRow) + _interval;
+        if (_nextRow <= now) _nextRow = now + _interval; // fell behind (PC slept, long pause): restart the schedule
 
-        var line = new StringBuilder(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
+        var line = new StringBuilder(now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
         foreach (var s in _columns)
         {
             line.Append(',');

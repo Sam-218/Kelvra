@@ -2,7 +2,7 @@ namespace Kelvra;
 
 /// <summary>
 /// Keeps the last hour of every sensor (one sample per second) in fixed ring buffers,
-/// for the History graphs and CSV logging. About 4 KB per sensor per hour of memory.
+/// for the History graphs and CSV logging. About 14 KB per sensor (3,600 floats) for the hour.
 /// </summary>
 public sealed class HistoryService
 {

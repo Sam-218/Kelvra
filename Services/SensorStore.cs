@@ -7,6 +7,8 @@ namespace Kelvra;
 public sealed class SensorStore : IDisposable
 {
     private readonly HardwareService _hardware = new();
+    private readonly Action _open;
+    private readonly Func<List<SensorReading>> _poll;
     private readonly Dictionary<string, int> _hardwareOrder = new();
     private readonly Dictionary<string, string> _groupNames = new();
 
@@ -19,19 +21,45 @@ public sealed class SensorStore : IDisposable
     public event Action? FirstLoad;
     public event Action? Updated;
 
+    public SensorStore()
+    {
+        _open = _hardware.Open;
+        _poll = _hardware.Poll;
+    }
+
+    /// <summary>For tests: reads from <paramref name="poll"/> instead of the real hardware.</summary>
+    internal SensorStore(Func<List<SensorReading>> poll)
+    {
+        _open = () => { };
+        _poll = poll;
+    }
+
+    /// <summary>Longest wait between retries while polling keeps failing.</summary>
+    internal static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(30);
+
     /// <summary>
     /// The polling loop: open the hardware, then poll → apply → raise <see cref="Updated"/> → wait, until cancelled.
     /// Called from the UI thread; polling runs on the thread pool and events are raised back on the UI thread.
+    /// Errors don't end it: <see cref="Error"/> is shown and the loop retries (slower while it keeps failing).
     /// </summary>
     public async Task RunAsync(Func<int> refreshMs, CancellationToken ct)
     {
-        try
+        bool opened = false;
+        int failures = 0;
+        while (!ct.IsCancellationRequested)
         {
-            await Task.Run(_hardware.Open, ct);
-            while (!ct.IsCancellationRequested)
+            long started = Environment.TickCount64;
+            try
             {
-                var readings = await Task.Run(_hardware.Poll, ct);
+                if (!opened)
+                {
+                    await Task.Run(_open, ct);
+                    opened = true;
+                }
+                var readings = await Task.Run(_poll, ct);
                 Apply(readings);
+                Error = null;
+                failures = 0;
 
                 if (!Loaded)
                 {
@@ -39,18 +67,32 @@ public sealed class SensorStore : IDisposable
                     FirstLoad?.Invoke();
                 }
                 Updated?.Invoke();
-
-                await Task.Delay(refreshMs(), ct);
             }
-        }
-        catch (OperationCanceledException)
-        {
-            // shutting down
-        }
-        catch (Exception ex)
-        {
-            Error = ex.Message;
-            Updated?.Invoke();
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                return; // shutting down
+            }
+            catch (Exception ex)
+            {
+                // A driver hiccup or an unplugged device mustn't freeze every reading, overlay and alert until restart
+                Error = ex.Message;
+                failures++;
+                try { Updated?.Invoke(); } catch { /* the banner will update on the next good poll */ }
+            }
+
+            // Fixed cadence: the refresh rate is the time from poll to poll, so slow devices don't stretch it
+            int interval = Math.Clamp(refreshMs(), 100, 60_000);
+            long wait = failures == 0
+                ? interval - (Environment.TickCount64 - started)
+                : (long)Math.Min(interval * Math.Pow(2, failures - 1), MaxRetryDelay.TotalMilliseconds);
+            try
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(Math.Max(wait, 20)), ct); // tiny minimum: let the UI breathe
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
         }
     }
 

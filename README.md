@@ -46,6 +46,7 @@
 ## Download
 
 1. Grab **`Kelvra.exe`** from the [Releases](../../releases) page (the `.sha256` file next to it lets you verify the download).
+   Put it in **`C:\Program Files\Kelvra`** if you want *Start with Windows*: Kelvra then starts as administrator without asking, so it only allows that from a folder normal programs can't change (not Downloads or the Desktop).
 2. Kelvra needs the **[.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)** (x64). If it's missing, Windows offers to download it the first time you start Kelvra.
 3. Start `Kelvra.exe`. It asks for administrator rights – that's required to read CPU temperatures, voltages and fan speeds.
 4. On first start Kelvra offers to install **PawnIO**, the small signed driver it needs for CPU sensors. You can also do this later under *Settings → Sensor driver*.
@@ -57,7 +58,7 @@
 ## Build from source
 
 ```bash
-git clone https://github.com/<Sam-218>/kelvra.git
+git clone https://github.com/Sam-218/kelvra.git
 cd kelvra
 dotnet publish Kelvra.csproj -c Release -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
 ```
@@ -65,7 +66,7 @@ dotnet publish Kelvra.csproj -c Release -p:PublishSingleFile=true -p:IncludeNati
 - Needs the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
 - The build downloads the official PawnIO installer once (hash-checked) and embeds it – see `Kelvra.csproj`.
 - Releases: push a tag like `v1.0.0` and the [Build workflow](.github/workflows/build.yml) creates a GitHub Release with `Kelvra.exe` and its checksum.
-- Optional signing: `scripts/sign.ps1` signs the exe with a self-signed certificate (your name, trusted only on your PC) or with a real code-signing certificate (`-Thumbprint` / `-PfxPath`).
+- Tests: `dotnet test tests/Kelvra.Tests` (also run by the Build workflow).
 
 ## Project layout
 
@@ -76,10 +77,17 @@ Services/    sensor polling, history, alerts, CSV logging, overlays, processes, 
 Views/       WPF pages and windows (one page per sidebar entry)
 Themes/      dark/light colours and control styles
 Assets/      app icon
+tests/       xUnit tests (logic, disk tools, safety and security checks)
 ```
 
 Settings are stored in `%APPDATA%\Kelvra\settings.json`; CSV logs go to `Documents\Kelvra Logs`.
 Kelvra has no telemetry and makes no network connections of its own.
+
+## Uninstall
+
+1. Turn off *Settings → Start with Windows* (removes the sign-in task), then exit Kelvra from the tray.
+2. Delete `Kelvra.exe` and the folders `%APPDATA%\Kelvra` (settings) and `Documents\Kelvra Logs` (CSV logs).
+3. Optional: uninstall **PawnIO** under *Windows Settings → Apps* if no other program (e.g. FanControl, LibreHardwareMonitor) uses it.
 
 ## Credits
 
