@@ -47,7 +47,7 @@
 
 1. Grab **`Kelvra.exe`** from the [Releases](../../releases) page (the `.sha256` file next to it lets you verify the download).
    Put it in **`C:\Program Files\Kelvra`** if you want *Start with Windows*: Kelvra then starts as administrator without asking, so it only allows that from a folder normal programs can't change (not Downloads or the Desktop).
-2. Kelvra needs the **[.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)** (x64). If it's missing, Windows offers to download it the first time you start Kelvra.
+2. Kelvra needs the **[.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)** (x64). If it's missing, Windows offers to download it the first time you start Kelvra.
 3. Start `Kelvra.exe`. It asks for administrator rights – that's required to read CPU temperatures, voltages and fan speeds.
 4. On first start Kelvra offers to install **PawnIO**, the small signed driver it needs for CPU sensors. You can also do this later under *Settings → Sensor driver*.
 
@@ -63,7 +63,7 @@ cd kelvra
 dotnet publish Kelvra.csproj -c Release -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
 ```
 
-- Needs the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
+- Needs the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
 - The build downloads the official PawnIO installer once (hash-checked) and embeds it – see `Kelvra.csproj`.
 - Releases: push a tag like `v1.0.0` and the [Build workflow](.github/workflows/build.yml) creates a GitHub Release with `Kelvra.exe` and its checksum.
 - Tests: `dotnet test tests/Kelvra.Tests` (also run by the Build workflow).
