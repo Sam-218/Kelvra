@@ -7,6 +7,10 @@ using System.Windows.Threading;
 
 namespace Kelvra;
 
+/// <summary>
+/// Entry point and service hub: loads settings, creates the shared services (sensors, overlays, history,
+/// alerts, CSV logger, tray icon) and runs the sensor polling loop. Pages reach them via <see cref="Current"/>.
+/// </summary>
 public partial class App : Application
 {
     private Mutex? _mutex;
@@ -29,6 +33,7 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // --- Single instance ---
         _mutex = new Mutex(true, "Kelvra.SingleInstance", out bool isFirst);
         if (!isFirst)
         {
@@ -44,6 +49,7 @@ public partial class App : Application
             args.Handled = true;
         };
 
+        // --- Settings and services (order matters: the windows below read these in their constructors) ---
         Settings = AppSettings.Load();
         SensorFormat.UseFahrenheit = Settings.Fahrenheit;
         ThemeManager.Initialize(Settings.Theme);
@@ -63,6 +69,7 @@ public partial class App : Application
         // Keep the logon task pointing at this exe, in case it was moved
         if (Settings.StartWithWindows) _ = Task.Run(() => Autostart.Enable(out _));
 
+        // Debounced save: changes only set a flag, so dragging a slider or overlay doesn't rewrite the file each frame
         _saveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.5) };
         _saveTimer.Tick += (_, _) =>
         {
@@ -76,6 +83,7 @@ public partial class App : Application
         PawnIoPromptWindow.ShowIfNeeded(Settings, MainView);
         MarkDirty();
 
+        // --- Data flow: each poll updates overlays, history and alerts; each history sample feeds the CSV logger ---
         Sensors.FirstLoad += OnFirstLoad;
         Sensors.Updated += Overlays.UpdateValues;
         Sensors.Updated += () =>
@@ -90,9 +98,11 @@ public partial class App : Application
             if (Settings.AlertSound) SystemSounds.Exclamation.Play();
         };
         Overlays.Sync();
+        // Runs until Quit(); the delegate re-reads the refresh rate so Settings changes apply on the next poll
         await Sensors.RunAsync(() => Settings.RefreshMs, _cts.Token);
     }
 
+    /// <summary>Once the sensor list exists: names overlay items and gives first-time users the "Essentials" overlay.</summary>
     private void OnFirstLoad()
     {
         Overlays.ResolveNames();
@@ -106,6 +116,7 @@ public partial class App : Application
         MarkDirty();
     }
 
+    /// <summary>Schedules a settings save (picked up by the 1.5 s save timer).</summary>
     public void MarkDirty() => _dirty = true;
 
     /// <summary>Saves settings when an alert rule is added, removed or edited (not on live status updates).</summary>
@@ -132,6 +143,7 @@ public partial class App : Application
 
     public bool IsQuitting { get; private set; }
 
+    /// <summary>The only real exit (ShutdownMode is explicit): stops polling, saves, and removes overlays and the tray icon.</summary>
     public void Quit()
     {
         if (IsQuitting) return;

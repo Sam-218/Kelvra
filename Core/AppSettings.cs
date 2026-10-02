@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 
 namespace Kelvra;
 
+/// <summary>Everything the user can change, saved as JSON in %APPDATA%\Kelvra\settings.json. New properties need a default.</summary>
 public sealed class AppSettings
 {
     public static readonly string Dir =
@@ -87,6 +88,7 @@ public sealed class AppSettings
         try
         {
             Directory.CreateDirectory(Dir);
+            // Write a temp file, then swap it in: a crash mid-write can't leave a half-written settings.json
             string tmp = FilePath + ".tmp";
             File.WriteAllText(tmp, JsonSerializer.Serialize(this, JsonOptions));
             File.Move(tmp, FilePath, overwrite: true);

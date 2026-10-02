@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace Kelvra;
 
+/// <summary>Win32 calls for global hotkeys, click-through/topmost overlay windows and the dark title bar.</summary>
 internal static class NativeMethods
 {
     public const int WM_HOTKEY = 0x0312;
@@ -36,6 +37,7 @@ internal static class NativeMethods
     [DllImport("dwmapi.dll")]
     public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
 
+    /// <summary>Turns extended window style bits on or off, leaving the others alone.</summary>
     public static void SetExStyle(IntPtr hwnd, int flags, bool on)
     {
         long ex = GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64();

@@ -11,6 +11,10 @@ using static Kelvra.NativeMethods;
 
 namespace Kelvra;
 
+/// <summary>
+/// Sidebar shell that switches between the pages, plus the Overlays editor, the Settings page, the global hotkeys
+/// (Ctrl+Shift+O / Ctrl+Shift+L) and the small toast messages. Each other page lives in its own UserControl.
+/// </summary>
 public partial class MainWindow : Window
 {
     private const int HotkeyToggleOverlays = 1;
@@ -117,6 +121,7 @@ public partial class MainWindow : Window
         Activate();
     }
 
+    /// <summary>All pages exist the whole time and are only shown/hidden, so they keep their state (scans, search text …).</summary>
     private void Nav_Checked(object sender, RoutedEventArgs e)
     {
         if (SensorsPage == null || CategoriesPage == null || HistoryPage == null || AlertsPage == null || SystemPage == null || AppsPage == null || DiskPage == null || OverlaysPage == null || SettingsPage == null) return; // during InitializeComponent
@@ -156,6 +161,7 @@ public partial class MainWindow : Window
         ShowToast("PawnIO installed – CPU sensors are now available");
     }
 
+    /// <summary>"+" on the Sensors page: adds to the overlay selected in the editor (or the first one, or a new one).</summary>
     private void AddSensorToOverlay(SensorVm sensor)
     {
         var target = _selected ?? _app.Settings.Overlays.FirstOrDefault();

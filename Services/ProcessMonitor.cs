@@ -81,6 +81,7 @@ public sealed class ProcessMonitor
             }
             else if (elapsedTicks > 0)
             {
+                // CPU time and wall time are both in 100 ns ticks; dividing by cores gives Task Manager's "% of the whole CPU"
                 row.Cpu = Math.Clamp((s.CpuTicks - row.LastCpuTicks) / elapsedTicks / cores * 100, 0, 100);
                 row.Disk = Math.Max(0, (s.IoBytes - row.LastIoBytes) / (elapsedTicks / TimeSpan.TicksPerSecond));
                 row.LastCpuTicks = s.CpuTicks;
@@ -100,6 +101,7 @@ public sealed class ProcessMonitor
         TotalMemory = totalMem;
     }
 
+    /// <summary>Raw counters for every process. PROCESS_QUERY_LIMITED_INFORMATION also works on most elevated/system processes.</summary>
     private static List<Sample> Collect()
     {
         var list = new List<Sample>();
@@ -135,6 +137,7 @@ public sealed class ProcessMonitor
         return list;
     }
 
+    /// <summary>Description and icon of an exe, cached per path (many processes share one exe, e.g. browsers).</summary>
     private (string, ImageSource?) FileInfoFor(string path)
     {
         if (_fileInfo.TryGetValue(path, out var info)) return info;

@@ -67,6 +67,7 @@ public static class ThemeManager
     }
 }
 
+/// <summary>Parses the "#RRGGBB" strings stored in overlay profiles, with a fallback instead of exceptions.</summary>
 public static class ColorUtil
 {
     public static Color Parse(string? hex, Color fallback)

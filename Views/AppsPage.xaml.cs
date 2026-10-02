@@ -16,6 +16,7 @@ public partial class AppsPage : UserControl
 
     private readonly ProcessMonitor _monitor = new();
     private readonly ListCollectionView _processView;
+    // Only runs while the Processes tab is on screen: sampling every process isn't free
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(2) };
     private ListCollectionView? _startupView;
     private string _sortKey = nameof(ProcessRow.Cpu);

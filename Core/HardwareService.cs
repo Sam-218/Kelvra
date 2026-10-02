@@ -3,6 +3,7 @@ using LibreHardwareMonitor.Hardware;
 
 namespace Kelvra;
 
+/// <summary>Immutable snapshot of one sensor from one poll (raw units: °C, MHz, W …). Made on the polling thread.</summary>
 public sealed record SensorReading(
     string Id,
     string HardwareId,
@@ -47,6 +48,7 @@ public sealed class HardwareService : IDisposable
         IsPsuEnabled = true,
     };
 
+    // Poll runs on a worker thread while Reopen can come from the UI (after a PawnIO install): never both at once
     private readonly object _lock = new();
     private bool _opened;
 
@@ -70,6 +72,7 @@ public sealed class HardwareService : IDisposable
         }
     }
 
+    /// <summary>Updates every device and returns all current readings. Slow (driver calls): call off the UI thread.</summary>
     public List<SensorReading> Poll()
     {
         var list = new List<SensorReading>(256);
@@ -82,6 +85,7 @@ public sealed class HardwareService : IDisposable
         return list;
     }
 
+    /// <summary>Adds the sensors of <paramref name="hw"/> and its sub-devices, all filed under the top-level device.</summary>
     private static void Collect(IHardware root, IHardware hw, List<SensorReading> list)
     {
         try { hw.Update(); } catch { /* some devices fail transiently */ }
@@ -112,6 +116,7 @@ public sealed class HardwareService : IDisposable
     }
 }
 
+/// <summary>Units, display text and °C/°F conversion for sensor values. Text is culture-invariant ("1.5 W" everywhere).</summary>
 public static class SensorFormat
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;

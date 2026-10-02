@@ -177,7 +177,9 @@ public partial class DuplicatesView : UserControl
             }
         });
 
-        foreach (var g in _groups) g.Files.RemoveAll(removed.Contains);
+        // HashSet: O(1) per check instead of scanning the whole removed list for every listed file
+        var gone = removed.ToHashSet();
+        foreach (var g in _groups) g.Files.RemoveAll(gone.Contains);
         _groups.RemoveAll(g => g.Files.Count < 2);
         ShowGroups();
         Summary.Text = $"Moved {removed.Count:N0} files ({ByteFormat.Format(removed.Sum(f => f.Node.Size))}) to the Recycle Bin." +

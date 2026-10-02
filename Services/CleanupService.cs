@@ -47,6 +47,7 @@ public sealed class CleanupTarget : ObservableObject
 /// <summary>Finds and empties temp folders, caches and similar junk. Files that are in use are skipped.</summary>
 public static class CleanupService
 {
+    /// <summary>The fixed list of places Kelvra knows how to clean (folders that don't exist on this PC are just empty).</summary>
     public static List<CleanupTarget> Targets()
     {
         string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -120,6 +121,7 @@ public static class CleanupService
 
     // ---------- measuring / cleaning ----------
 
+    /// <summary>Counts what <see cref="Clean"/> would delete and stores it on the target. Read-only; safe on a worker thread.</summary>
     public static void Measure(CleanupTarget target)
     {
         long size = 0;
@@ -138,11 +140,10 @@ public static class CleanupService
             foreach (var folder in target.Folders.Where(Directory.Exists))
             {
                 var cutoff = DateTime.Now - target.MinAge;
-                foreach (var file in SafeFiles(folder))
+                foreach (var fi in SafeFileInfos(folder))
                 {
                     try
                     {
-                        var fi = new FileInfo(file);
                         if (target.MinAge > TimeSpan.Zero && fi.LastWriteTime > cutoff) continue;
                         size += fi.Length;
                         files++;
@@ -167,6 +168,7 @@ public static class CleanupService
             long before = Math.Max(0, target.Size);
             int items = target.Files;
             int hr = SHEmptyRecycleBin(IntPtr.Zero, null, SHERB_NOCONFIRMATION | SHERB_NOPROGRESSUI | SHERB_NOSOUND);
+            // E_UNEXPECTED (0x8000FFFF) is what Windows returns when the bin was already empty: treat it as success
             return hr == 0 || hr == unchecked((int)0x8000FFFF) ? (before, items, 0) : (0, 0, items);
         }
 
@@ -179,6 +181,7 @@ public static class CleanupService
             {
                 try
                 {
+                    // Fresh FileInfo on purpose (not the listing's cached one): a file that vanished meanwhile throws here and counts as skipped
                     var fi = new FileInfo(file);
                     if (target.MinAge > TimeSpan.Zero && fi.LastWriteTime > cutoff) continue;
                     long len = fi.Length;
@@ -214,6 +217,16 @@ public static class CleanupService
     {
         try { return Directory.EnumerateFiles(folder, "*", Recursive).ToList(); }
         catch { return Array.Empty<string>(); }
+    }
+
+    /// <summary>
+    /// Like <see cref="SafeFiles"/>, but the FileInfos already carry size and dates from the directory listing.
+    /// Measuring then needs no extra file-system call per file (Windows Update's cache alone can hold 250k+ files).
+    /// </summary>
+    private static IEnumerable<FileInfo> SafeFileInfos(string folder)
+    {
+        try { return new DirectoryInfo(folder).EnumerateFiles("*", Recursive).ToList(); }
+        catch { return Array.Empty<FileInfo>(); }
     }
 
     private static IEnumerable<string> SafeDirsRecursive(string folder)

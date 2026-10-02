@@ -60,7 +60,7 @@ public sealed class SensorVm : ObservableObject
     public string MinText { get => _minText; private set => Set(ref _minText, value); }
     public string MaxText { get => _maxText; private set => Set(ref _maxText, value); }
 
-    /// <summary>0 = normal, 1 = warm, 2 = hot.</summary>
+    /// <summary>0 = normal, 1 = warm, 2 = hot (colours overlay values when warning colours are on).</summary>
     public int Level { get => _level; private set => Set(ref _level, value); }
 
     public bool IsGpu => HardwareType is HardwareType.GpuNvidia or HardwareType.GpuAmd or HardwareType.GpuIntel;
@@ -76,6 +76,7 @@ public sealed class SensorVm : ObservableObject
         Level = LevelFor(Type, r.Value);
     }
 
+    /// <summary>Fixed limits on the raw value: 70/85 °C for temperatures, 80/95 % for load. Other types never warn.</summary>
     public static int LevelFor(SensorType type, float? value)
     {
         if (value is not float v) return 0;
@@ -93,6 +94,7 @@ public sealed class SensorVm : ObservableObject
         get
         {
             if (Value is not float v) return 0;
+            // Percentages fill to 100; temperatures use 100 °C as "full"; anything else is relative to its own max so far
             double f = Type switch
             {
                 SensorType.Load or SensorType.Control or SensorType.Level or SensorType.Temperature => v / 100.0,
@@ -108,10 +110,12 @@ public static class OverlayTemplates
 {
     public static readonly string[] Names = { "Blank", "Essentials", "Temperatures", "Compact bar" };
 
+    /// <summary>Builds a new profile from a template, picking matching sensors from what was actually detected.</summary>
     public static OverlayProfile Create(string template, IReadOnlyList<SensorVm> sensors, string name)
     {
         var p = new OverlayProfile { Name = name };
 
+        // Adds the first sensor that matches; later matchers are fallbacks (e.g. "Package" temp, else any CPU temp)
         void Add(string? label, bool bar, params Func<SensorVm, bool>[] matches)
         {
             foreach (var match in matches)

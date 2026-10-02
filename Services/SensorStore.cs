@@ -19,6 +19,10 @@ public sealed class SensorStore : IDisposable
     public event Action? FirstLoad;
     public event Action? Updated;
 
+    /// <summary>
+    /// The polling loop: open the hardware, then poll → apply → raise <see cref="Updated"/> → wait, until cancelled.
+    /// Called from the UI thread; polling runs on the thread pool and events are raised back on the UI thread.
+    /// </summary>
     public async Task RunAsync(Func<int> refreshMs, CancellationToken ct)
     {
         try
@@ -53,6 +57,7 @@ public sealed class SensorStore : IDisposable
     /// <summary>Reconnects to the hardware so newly available sensors (e.g. CPU temps after PawnIO) show up.</summary>
     public Task ReopenAsync() => Task.Run(_hardware.Reopen);
 
+    /// <summary>Updates known sensors in place (bindings just see property changes) and appends newly found ones.</summary>
     private void Apply(List<SensorReading> readings)
     {
         var fresh = new List<SensorReading>();
@@ -82,6 +87,7 @@ public sealed class SensorStore : IDisposable
         }
     }
 
+    /// <summary>"GeForce RTX 4060", then "GeForce RTX 4060 #2" for an identical second card.</summary>
     private string UniqueGroupName(string name)
     {
         if (!_groupNames.ContainsValue(name)) return name;
@@ -90,6 +96,7 @@ public sealed class SensorStore : IDisposable
         return $"{name} #{n}";
     }
 
+    /// <summary>Order of sensor types within a device: temperatures first, then load, clocks …; the rest by enum value.</summary>
     private static int TypeOrder(SensorType t) => t switch
     {
         SensorType.Temperature => 0,

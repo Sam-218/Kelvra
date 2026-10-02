@@ -75,6 +75,7 @@ public static class StartupManager
     private const string Run32 = @"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run";
     private const string Approved = @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\";
 
+    /// <summary>All Run-key and Startup-folder entries (you and all users), sorted by name. Reads the registry and disk: worker thread.</summary>
     public static List<StartupItem> Load()
     {
         var items = new List<StartupItem>();
@@ -132,6 +133,7 @@ public static class StartupManager
         }
     }
 
+    /// <summary>Writes Task Manager's 12-byte flag: byte 0 = 0x02 on / 0x03 off, bytes 4–11 = when it was turned off (FILETIME).</summary>
     internal static void SetApproved(StartupItem item, bool enabled)
     {
         var data = new byte[12];
@@ -154,6 +156,7 @@ public static class StartupManager
         return exe > 0 ? command[..(exe + 4)] : command.Split(' ')[0];
     }
 
+    /// <summary>Resolves a .lnk via the WScript.Shell COM object (no extra dependency). Null if it can't be read.</summary>
     private static string? ShortcutTarget(string lnk)
     {
         try

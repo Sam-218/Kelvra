@@ -126,6 +126,7 @@ public partial class SensorsPage : UserControl
 
     // ---------- live updates ----------
 
+    /// <summary>After every poll: subtitle, chip counts (only rebuilt when they changed) and the warning banner.</summary>
     private void OnSensorsUpdated()
     {
         var sensors = _app.Sensors;

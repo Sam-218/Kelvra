@@ -22,6 +22,7 @@ public sealed class CsvLogger : IDisposable
 
     public event Action? StateChanged;
 
+    /// <summary>Starts a new file in Documents\Kelvra Logs with one column per sensor. Throws if there's nothing to record.</summary>
     public void Start(IEnumerable<SensorVm> sensors, int intervalSeconds)
     {
         Stop();
@@ -47,6 +48,7 @@ public sealed class CsvLogger : IDisposable
     public void OnSample()
     {
         if (_writer == null) return;
+        // Counts history samples, not seconds: with a refresh rate slower than 1 s the rows are further apart than the interval says
         if (_tick++ % _intervalSeconds != 0) return;
 
         var line = new StringBuilder(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
@@ -76,6 +78,7 @@ public sealed class CsvLogger : IDisposable
         StateChanged?.Invoke();
     }
 
+    /// <summary>RFC 4180 quoting: wrap in quotes and double inner quotes when the text has a comma, quote or newline.</summary>
     private static string Escape(string s) =>
         s.IndexOfAny(new[] { ',', '"', '\n' }) >= 0 ? "\"" + s.Replace("\"", "\"\"") + "\"" : s;
 

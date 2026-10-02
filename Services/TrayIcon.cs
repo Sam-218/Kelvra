@@ -3,6 +3,7 @@ using WinForms = System.Windows.Forms;
 
 namespace Kelvra;
 
+/// <summary>Notification-area icon (WinForms NotifyIcon; WPF has none): open, overlay toggles, exit, and alert balloons.</summary>
 public sealed class TrayIcon : IDisposable
 {
     private readonly WinForms.NotifyIcon _icon = new();

@@ -14,6 +14,7 @@ public sealed class AlertService
 
     public event Action<AlertEvent>? Fired;
 
+    /// <summary>Called after every poll: refreshes each rule's live status and fires the ones whose condition has held long enough.</summary>
     public void Evaluate(AppSettings settings, SensorStore store)
     {
         var now = DateTime.Now;
@@ -43,6 +44,7 @@ public sealed class AlertService
 
             if (!_conditionSince.TryGetValue(rule.Id, out var since)) _conditionSince[rule.Id] = since = now;
             if ((now - since).TotalSeconds < rule.DurationSeconds) continue;
+            // A cooldown of 0 still waits 6 s, so a condition that stays true can't fire on every poll
             if (_lastFired.TryGetValue(rule.Id, out var last) && (now - last).TotalMinutes < Math.Max(rule.CooldownMinutes, 0.1)) continue;
 
             _lastFired[rule.Id] = now;

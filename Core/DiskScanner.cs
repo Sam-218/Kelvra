@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO.Enumeration;
+using System.Runtime.InteropServices;
 using System.Windows.Media;
 
 namespace Kelvra;
@@ -25,6 +26,7 @@ public sealed class DiskNode
 
     public string Extension => IsDirectory ? "" : Path.GetExtension(Name).ToLowerInvariant();
 
+    /// <summary>Built on every call (one string per folder level), so avoid it in loops over the whole tree.</summary>
     public string FullPath => Parent == null ? Name : Path.Join(Parent.FullPath, Name);
 
     public IEnumerable<DiskNode> Ancestors()
@@ -61,6 +63,7 @@ public sealed class DiskScanner
     public long BytesScanned => Interlocked.Read(ref _bytes);
     public string CurrentFolder => _current;
 
+    /// <summary>Scans <paramref name="rootPath"/> completely. Blocking and long-running: call it on a worker thread.</summary>
     public ScanResult Scan(string rootPath, CancellationToken ct)
     {
         var started = DateTime.UtcNow;
@@ -84,6 +87,7 @@ public sealed class DiskScanner
         return new ScanResult(root, DateTime.UtcNow - started, _errors, used, types, largest);
     }
 
+    /// <summary>Lists one folder, then recurses into its subfolders (in parallel when there's more than one).</summary>
     private void ScanFolder(DiskNode node, string path, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
@@ -167,6 +171,7 @@ public sealed class DiskScanner
     public static (List<FileTypeStat> Types, List<DiskNode> Largest) Analyze(DiskNode root, int largestCount = 500)
     {
         var types = new Dictionary<string, (long Size, int Count)>();
+        // Min-heap capped at largestCount: adding a file and dropping the smallest keeps the top N without sorting everything
         var largest = new PriorityQueue<DiskNode, long>();
         var stack = new Stack<DiskNode>();
         stack.Push(root);
@@ -182,9 +187,9 @@ public sealed class DiskScanner
                     stack.Push(c);
                     continue;
                 }
-                string ext = c.Extension;
-                types.TryGetValue(ext, out var t);
-                types[ext] = (t.Size + c.Size, t.Count + 1);
+                // One hash lookup per file instead of TryGetValue + indexer (this loop runs once per file on the drive)
+                ref var t = ref CollectionsMarshal.GetValueRefOrAddDefault(types, c.Extension, out _);
+                t = (t.Size + c.Size, t.Count + 1);
 
                 largest.Enqueue(c, c.Size);
                 if (largest.Count > largestCount) largest.Dequeue();

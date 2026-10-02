@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -53,6 +54,10 @@ public sealed class DuplicateFinder
     public int Total => _total;
     public string Stage => _stage;
 
+    /// <summary>
+    /// Searches an already scanned tree (sizes come from the scan, contents from disk). Runs for a while: call on a worker
+    /// thread and poll <see cref="Stage"/>/<see cref="Done"/>/<see cref="Total"/> for progress. Biggest waste first.
+    /// </summary>
     public List<DuplicateGroup> Find(DiskNode root, long minSize, bool skipWindows, CancellationToken ct)
     {
         _stage = "Collecting files…";
@@ -70,7 +75,7 @@ public sealed class DuplicateFinder
             {
                 if (c.IsDirectory)
                 {
-                    if (skipWindows && string.Equals(c.FullPath, windowsDir, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (skipWindows && IsSkippedWindowsFolder(c, windowsDir)) continue;
                     stack.Push(c);
                 }
                 else if (c.Size >= minSize)
@@ -110,6 +115,14 @@ public sealed class DuplicateFinder
         return groups.OrderByDescending(x => x.Wasted).ToList();
     }
 
+    /// <summary>
+    /// True only for the Windows folder itself. The name is compared first so the full path,
+    /// which allocates a string per folder level, is only built for folders actually called "Windows".
+    /// </summary>
+    private static bool IsSkippedWindowsFolder(DiskNode dir, string windowsDir) =>
+        dir.Name.AsSpan().Equals(Path.GetFileName(windowsDir.AsSpan()), StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(dir.FullPath, windowsDir, StringComparison.OrdinalIgnoreCase);
+
     private sealed record Hashed(DiskNode Node, string Hash, string FileId, DateTime Modified);
 
     private List<Hashed> Hash(IEnumerable<DiskNode> files, bool full, CancellationToken ct)
@@ -126,8 +139,7 @@ public sealed class DuplicateFinder
                 using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
                 string id = FileId(handle);
                 var modified = File.GetLastWriteTime(path);
-                using var stream = new FileStream(handle, FileAccess.Read, 1024 * 1024);
-                results.Add(new Hashed(node, full ? FullHash(stream, ct) : SampleHash(stream, node.Size), id, modified));
+                results.Add(new Hashed(node, full ? FullHash(handle, ct) : SampleHash(handle, node.Size), id, modified));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -138,39 +150,64 @@ public sealed class DuplicateFinder
         return results.ToList();
     }
 
-    private static string SampleHash(FileStream s, long size)
+    // Both hashes read straight from the handle (RandomAccess) into pooled buffers. A buffered FileStream
+    // would read a whole 1 MB block to serve each 64 KB sample, and new 1 MB arrays per file churn the large-object heap.
+
+    /// <summary>SHA-256 of the first and last 64 KB (the whole file when it's 128 KB or smaller).</summary>
+    private static string SampleHash(SafeFileHandle handle, long size)
     {
-        using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        var buffer = new byte[Sample];
-        int n = s.Read(buffer, 0, buffer.Length);
-        sha.AppendData(buffer, 0, n);
-        if (size > Sample)
+        byte[] buffer = ArrayPool<byte>.Shared.Rent(Sample);
+        try
         {
-            s.Seek(Math.Max(Sample, size - Sample), SeekOrigin.Begin);
-            n = s.Read(buffer, 0, buffer.Length);
+            using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            int n = RandomAccess.Read(handle, buffer.AsSpan(0, Sample), 0);
             sha.AppendData(buffer, 0, n);
+            if (size > Sample)
+            {
+                // Never re-read the first block: small files only contribute their remainder here
+                n = RandomAccess.Read(handle, buffer.AsSpan(0, Sample), Math.Max(Sample, size - Sample));
+                sha.AppendData(buffer, 0, n);
+            }
+            return Convert.ToHexString(sha.GetHashAndReset());
         }
-        return Convert.ToHexString(sha.GetHashAndReset());
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
-    private static string FullHash(FileStream s, CancellationToken ct)
+    private static string FullHash(SafeFileHandle handle, CancellationToken ct)
     {
-        using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        var buffer = new byte[1024 * 1024];
-        int n;
-        while ((n = s.Read(buffer, 0, buffer.Length)) > 0)
+        const int chunk = 1024 * 1024;
+        byte[] buffer = ArrayPool<byte>.Shared.Rent(chunk);
+        try
         {
-            ct.ThrowIfCancellationRequested();
-            sha.AppendData(buffer, 0, n);
+            using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            long offset = 0;
+            int n;
+            while ((n = RandomAccess.Read(handle, buffer.AsSpan(0, chunk), offset)) > 0)
+            {
+                ct.ThrowIfCancellationRequested();
+                sha.AppendData(buffer, 0, n);
+                offset += n;
+            }
+            return Convert.ToHexString(sha.GetHashAndReset());
         }
-        return Convert.ToHexString(sha.GetHashAndReset());
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
+    /// <summary>Volume + file index: the same for every hard link to one file. A random id if it can't be read (never merges).</summary>
     private static string FileId(SafeFileHandle h) =>
         GetFileInformationByHandle(h, out var info)
             ? $"{info.VolumeSerialNumber:X}-{info.FileIndexHigh:X}-{info.FileIndexLow:X}"
             : Guid.NewGuid().ToString();
 
+    // TODO(review): without Pack = 4 the longs are 8-byte aligned, so this struct is 56 bytes instead of the native 52 and every
+    // field after FileAttributes is read 4 bytes off (VolumeSerialNumber gets FileSizeHigh, FileIndexLow is never filled).
+    // Hard links on one volume are still told apart correctly; ids from different volumes could collide.
     [StructLayout(LayoutKind.Sequential)]
     private struct BY_HANDLE_FILE_INFORMATION
     {
