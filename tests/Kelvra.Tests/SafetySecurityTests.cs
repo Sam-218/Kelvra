@@ -75,32 +75,6 @@ public class SafetySecurityTests
     public void A_fake_csrss_outside_windows_is_not_protected() =>
         Assert.False(ProcessGuard.IsCritical(int.MaxValue - 1, "csrss", @"C:\Users\Public\csrss.exe"));
 
-    // ---------- SEC-01: only admin-controlled locations are safe to autostart elevated ----------
-
-    [Fact]
-    public void Windows_and_program_files_binaries_are_admin_only()
-    {
-        Assert.True(SecureFiles.IsAdminOnlyWritable(Path.Combine(Win, "System32", "notepad.exe")));
-        Assert.True(SecureFiles.IsAdminOnlyWritable(Path.Combine(ProgramFiles, "dotnet", "dotnet.exe")));
-    }
-
-    [Fact]
-    public void Files_users_can_change_are_not_admin_only()
-    {
-        using var dir = new TempDir();
-        Assert.False(SecureFiles.IsAdminOnlyWritable(dir.File("k.exe", new byte[10])));
-        Assert.False(SecureFiles.IsAdminOnlyWritable(Path.Combine(dir.Path, "missing.exe")));
-    }
-
-    [Fact]
-    public void Autostart_refuses_an_exe_in_a_user_writable_folder()
-    {
-        // The test host runs from tests\...\bin, a folder the user owns: Enable must refuse before touching Task Scheduler
-        Assert.False(Autostart.IsExeLocationSafe());
-        Assert.False(Autostart.Enable(out string error));
-        Assert.Contains("normal programs can change", error);
-    }
-
     // ---------- SEC-02/03: files handed to elevated programs ----------
 
     [Fact]

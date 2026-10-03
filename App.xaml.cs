@@ -73,14 +73,8 @@ public partial class App : Application
             else MessageBox.Show(MainView, message, "Kelvra", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
 
-        // Keep the logon task pointing at this exe, in case it was moved. From a folder other programs can change
-        // the task is left alone (never re-pointed there) and the user is told to move Kelvra.exe.
-        if (Settings.StartWithWindows)
-        {
-            if (Autostart.IsExeLocationSafe()) _ = Task.Run(() => Autostart.Enable(out _));
-            else Tray.Notify("Start with Windows needs attention",
-                "Kelvra.exe is in a folder other programs can change. Move it to C:\\Program Files\\Kelvra (see Settings).");
-        }
+        // Keep the logon task pointing at this exe, in case it was moved
+        if (Settings.StartWithWindows) _ = Task.Run(() => Autostart.Enable(out _));
 
         // Debounced save: changes only set a flag, so dragging a slider or overlay doesn't rewrite the file each frame
         _saveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.5) };

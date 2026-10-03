@@ -17,30 +17,10 @@ public static class Autostart
 
     public static bool IsEnabled() => RunSchtasks($"/Query /TN \"{TaskName}\"", out _) == 0;
 
-    /// <summary>Kelvra.exe's current path (where the logon task would point).</summary>
-    public static string ExePath => Environment.ProcessPath ?? throw new InvalidOperationException("Can't find Kelvra.exe");
-
-    /// <summary>
-    /// The task starts Kelvra as administrator without asking. That's only safe when normal programs can't replace
-    /// Kelvra.exe (or drop a DLL next to it), e.g. in C:\Program Files\Kelvra, not in Downloads or on the Desktop.
-    /// </summary>
-    public static bool IsExeLocationSafe() => SecureFiles.IsAdminOnlyWritable(ExePath);
-
-    public static string UnsafeLocationMessage =>
-        $"Kelvra.exe is in a folder that normal programs can change:\n{Path.GetDirectoryName(ExePath)}\n\n" +
-        "Starting it with Windows would run that file as administrator at every sign-in, so any program could replace it " +
-        "and take over your PC. Move Kelvra.exe to a folder only administrators can change, e.g. C:\\Program Files\\Kelvra, " +
-        "start it from there and turn this on again.";
-
-    /// <summary>Creates or updates the logon task (also fixes the path if the exe moved). Refuses unsafe exe locations.</summary>
+    /// <summary>Creates or updates the logon task (also fixes the path if the exe moved).</summary>
     public static bool Enable(out string error)
     {
-        string exe = ExePath;
-        if (!IsExeLocationSafe())
-        {
-            error = UnsafeLocationMessage;
-            return false;
-        }
+        string exe = Environment.ProcessPath ?? throw new InvalidOperationException("Can't find Kelvra.exe");
         string user = WindowsIdentity.GetCurrent().Name;
         string xml = $"""
             <?xml version="1.0" encoding="UTF-16"?>

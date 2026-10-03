@@ -337,7 +337,6 @@ public partial class MainWindow : Window
         StartMinimizedSwitch.IsChecked = s.StartMinimized;
         CloseToTraySwitch.IsChecked = s.CloseToTray;
         StartWithWindowsSwitch.IsChecked = s.StartWithWindows;
-        UpdateAutostartWarning();
         (s.Fahrenheit ? UnitFahrenheit : UnitCelsius).IsChecked = true;
         foreach (RadioButton r in LogIntervalButtons.Children)
             r.IsChecked = int.Parse((string)r.Tag) == s.LogIntervalSeconds;
@@ -401,14 +400,6 @@ public partial class MainWindow : Window
                 "Kelvra", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
-        if (on && !Autostart.IsExeLocationSafe())
-        {
-            _syncingUi = true;
-            StartWithWindowsSwitch.IsChecked = false;
-            _syncingUi = false;
-            MessageBox.Show(this, Autostart.UnsafeLocationMessage, "Start with Windows", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
         StartWithWindowsSwitch.IsEnabled = false;
         string error = "";
         bool ok = await Task.Run(() => on ? Autostart.Enable(out error) : Autostart.Disable(out error));
@@ -425,13 +416,8 @@ public partial class MainWindow : Window
         }
         _app.Settings.StartWithWindows = on;
         _app.MarkDirty();
-        UpdateAutostartWarning();
         ShowToast(on ? "Kelvra will start in the tray when you sign in" : "Kelvra won't start with Windows");
     }
-
-    /// <summary>An older Kelvra may have created the task from an unsafe folder: it stays, but the user is told to move the exe.</summary>
-    private void UpdateAutostartWarning() =>
-        AutostartWarning.Visibility = _app.Settings.StartWithWindows && !Autostart.IsExeLocationSafe() ? Visibility.Visible : Visibility.Collapsed;
 
     private void OpenSettingsFolder_Click(object sender, RoutedEventArgs e)
     {
