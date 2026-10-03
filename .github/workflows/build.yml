@@ -51,10 +51,19 @@ jobs:
             out/Kelvra.exe
             out/Kelvra.exe.sha256
 
+      # The release description is the annotated tag's message (git tag -a vX.Y.Z -F notes.md)
+      - name: Release notes from the tag message
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        run: |
+          git fetch --force origin "refs/tags/${{ github.ref_name }}:refs/tags/${{ github.ref_name }}"
+          git tag -l --format='%(contents)' "${{ github.ref_name }}" | Out-File release-notes.md -Encoding utf8
+
       - name: Create release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
+          body_path: release-notes.md
           files: |
             out/Kelvra.exe
             out/Kelvra.exe.sha256
