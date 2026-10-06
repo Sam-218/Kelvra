@@ -1,0 +1,708 @@
+<UserControl x:Class="Kelvra.OverlaysPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Kelvra">
+    <UserControl.Resources>
+        <local:MatchConverter x:Key="Match" />
+        <local:MatchVisibilityConverter x:Key="MatchVis" />
+        <local:TemperatureConverter x:Key="Temp" />
+        <local:NumberLabelConverter x:Key="Num" />
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+
+        <!-- label | slider | value -->
+        <Style x:Key="RowGrid" TargetType="Grid">
+            <Setter Property="Margin" Value="0,0,0,10" />
+        </Style>
+        <Style x:Key="ValueText" TargetType="TextBlock" BasedOn="{StaticResource Mono}">
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <Style x:Key="SectionLabel" TargetType="TextBlock" BasedOn="{StaticResource Overline}">
+            <Setter Property="Margin" Value="0,4,0,10" />
+        </Style>
+        <Style x:Key="AnchorButton" TargetType="RadioButton" BasedOn="{StaticResource Segment}">
+            <Setter Property="Width" Value="44" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Margin" Value="0,0,4,4" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="GroupName" Value="Anchor" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="24,20,24,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="250" />
+            <ColumnDefinition Width="16" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Grid.ColumnSpan="3" Margin="0,0,0,16">
+            <TextBlock Text="Overlays" Style="{StaticResource H1}" />
+            <TextBlock Text="On-screen displays for your games. Each one has its own sensors, look and place – the preview shows exactly what you'll see."
+                       Style="{StaticResource Muted}" Margin="0,4,0,0" />
+        </StackPanel>
+
+        <!-- ===== overlay list ===== -->
+        <Border Grid.Row="1" Style="{StaticResource Card}" Padding="10" Margin="0">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Margin="6,4,6,8">
+                    <TextBlock Text="NEW OVERLAY" Style="{StaticResource Overline}" Margin="0,0,0,8" />
+                    <WrapPanel x:Name="TemplateButtons" />
+                    <Button Style="{StaticResource GhostButton}" HorizontalAlignment="Left" Padding="8,4" Margin="-8,2,0,0"
+                            Click="ImportOverlay_Click" ToolTip="Add an overlay someone shared with you (.kelvra-overlay.json)">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE8B5;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,8,0" />
+                            <TextBlock Text="Import from file…" FontSize="12" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+                <Rectangle DockPanel.Dock="Top" Height="1" Fill="{DynamicResource LineBrush}" Margin="4,4,4,8" />
+                <ListBox x:Name="OverlayList" SelectionChanged="OverlayList_SelectionChanged" AutomationProperties.Name="Overlays">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="{x:Type local:OverlayProfile}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding Summary}" Style="{StaticResource Muted}" />
+                                </StackPanel>
+                                <CheckBox Grid.Column="1" Style="{StaticResource Switch}" IsChecked="{Binding Enabled}" Margin="0"
+                                          ToolTip="Show this overlay" AutomationProperties.Name="Show this overlay" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+        </Border>
+
+        <!-- ===== empty state ===== -->
+        <Border x:Name="NoOverlaySelected" Grid.Row="1" Grid.Column="2" Style="{StaticResource Card}" Margin="0">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                <TextBlock Text="&#xE7F4;" Style="{StaticResource Icon}" FontSize="40" HorizontalAlignment="Center" Foreground="{DynamicResource MutedBrush}" />
+                <TextBlock Text="Pick an overlay on the left, or create a new one." Style="{StaticResource Muted}" FontSize="13" Margin="0,12,0,0" />
+            </StackPanel>
+        </Border>
+
+        <!-- ===== editor ===== -->
+        <DockPanel x:Name="Editor" Grid.Row="1" Grid.Column="2" Visibility="Collapsed">
+            <!-- name + actions -->
+            <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" FontSize="15" FontWeight="SemiBold" Tag="Overlay name"
+                         MaxWidth="320" MinWidth="200" HorizontalAlignment="Left" AutomationProperties.Name="Overlay name" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding Enabled}" Content="Show" Margin="0,0,14,0" />
+                    <ToggleButton Style="{StaticResource BaseButton}" IsChecked="{Binding Locked}" Margin="0,0,8,0"
+                                  ToolTip="Locked overlays let clicks through to the game. Unlock to drag and resize them.">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="LockIcon" Text="&#xE72E;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,8,0" />
+                            <TextBlock x:Name="LockText" Text="Locked" />
+                        </StackPanel>
+                    </ToggleButton>
+                    <Button Click="ExportOverlay_Click" Margin="0,0,8,0" ToolTip="Save this overlay as a file you can share">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xEDE1;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,8,0" />
+                            <TextBlock Text="Export" />
+                        </StackPanel>
+                    </Button>
+                    <Button Click="Duplicate_Click" Margin="0,0,8,0" ToolTip="Make a copy of this overlay">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE8C8;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,8,0" />
+                            <TextBlock Text="Duplicate" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource DangerButton}" Click="Delete_Click" ToolTip="Delete this overlay">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE74D;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,8,0" />
+                            <TextBlock Text="Delete" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <!-- live preview -->
+            <Border DockPanel.Dock="Top" Style="{StaticResource Card}" Padding="0" Margin="0,0,0,10">
+                <Grid>
+                    <!-- Real size, like in the game; a tall overlay scrolls -->
+                    <Border x:Name="Backdrop" Height="240" CornerRadius="6" ClipToBounds="True">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Focusable="False">
+                            <ContentControl x:Name="PreviewBox" Margin="16,36,16,16" HorizontalAlignment="Center" VerticalAlignment="Center" Focusable="False" />
+                        </ScrollViewer>
+                    </Border>
+                    <Border Style="{StaticResource SegmentHost}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8"
+                            ToolTip="Check how readable the overlay is over different game scenes">
+                        <StackPanel x:Name="BackdropButtons" Orientation="Horizontal" AutomationProperties.Name="Preview background">
+                            <RadioButton Style="{StaticResource Segment}" Content="Dark" Tag="dark" GroupName="Backdrop" Checked="Backdrop_Checked" FontSize="11" />
+                            <RadioButton Style="{StaticResource Segment}" Content="Bright" Tag="bright" GroupName="Backdrop" Checked="Backdrop_Checked" FontSize="11" />
+                            <RadioButton Style="{StaticResource Segment}" Content="Busy" Tag="busy" GroupName="Backdrop" Checked="Backdrop_Checked" FontSize="11" />
+                        </StackPanel>
+                    </Border>
+                    <TextBlock Text="PREVIEW" Style="{StaticResource Overline}" Margin="12,10,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"
+                               Foreground="{DynamicResource MutedBrush}" />
+                </Grid>
+            </Border>
+
+            <!-- tabs -->
+            <Border DockPanel.Dock="Top" Style="{StaticResource SegmentHost}" Margin="0,0,0,10">
+                <StackPanel x:Name="TabButtons" Orientation="Horizontal" AutomationProperties.Name="Overlay settings">
+                    <RadioButton Style="{StaticResource Segment}" Content="Sensors" Tag="Sensors" GroupName="OverlayTab" IsChecked="True" Checked="Tab_Checked" />
+                    <RadioButton Style="{StaticResource Segment}" Content="Style" Tag="Style" GroupName="OverlayTab" Checked="Tab_Checked" />
+                    <RadioButton Style="{StaticResource Segment}" Content="Layout" Tag="Layout" GroupName="OverlayTab" Checked="Tab_Checked" />
+                    <RadioButton Style="{StaticResource Segment}" Content="Position" Tag="Position" GroupName="OverlayTab" Checked="Tab_Checked" />
+                    <RadioButton Style="{StaticResource Segment}" Content="Warnings" Tag="Warnings" GroupName="OverlayTab" Checked="Tab_Checked" />
+                </StackPanel>
+            </Border>
+
+            <ScrollViewer x:Name="TabScroller" VerticalScrollBarVisibility="Auto">
+                <Grid Margin="0,0,6,0">
+
+                    <!-- ===== Sensors ===== -->
+                    <Border x:Name="SensorsTab" Style="{StaticResource Card}" Margin="0">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,10">
+                                <TextBlock Text="What it shows" Style="{StaticResource H2}" Margin="0" VerticalAlignment="Center" />
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <TextBox x:Name="PlaceBox" Width="180" Tag="Clock for a place…" KeyDown="PlaceBox_KeyDown"
+                                             ToolTip="Type a country, state or city and press Enter to add its local time" AutomationProperties.Name="Clock for a place" />
+                                    <Button Click="AddPlace_Click" Margin="6,0,8,0" ToolTip="Add a clock for this place">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE823;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,8,0" />
+                                            <TextBlock Text="Add clock" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Style="{StaticResource AccentButton}" Click="AddSensors_Click">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE710;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,8,0" />
+                                            <TextBlock Text="Add sensors" />
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock x:Name="NoItemsText" Text="No sensors yet. Click “Add sensors”, or use the + button on the Sensors page."
+                                       Style="{StaticResource Muted}" Margin="0,4" />
+                            <ItemsControl x:Name="ItemsList" ItemsSource="{Binding Items}" Focusable="False">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type local:OverlayItem}">
+                                        <Border BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,0,0,1" Padding="0,6">
+                                            <StackPanel>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="160" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <Button Style="{StaticResource IconButton}" Content="&#xE70E;" Width="30" Height="30" Click="MoveUp_Click"
+                                                                ToolTip="Move up" AutomationProperties.Name="Move sensor up" />
+                                                        <Button Style="{StaticResource IconButton}" Content="&#xE70D;" Width="30" Height="30" Click="MoveDown_Click"
+                                                                ToolTip="Move down" AutomationProperties.Name="Move sensor down" />
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" Margin="10,0" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding SensorName}" TextTrimming="CharacterEllipsis" />
+                                                        <TextBlock Text="{Binding HardwareName}" Style="{StaticResource Muted}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                                                    </StackPanel>
+                                                    <TextBox Grid.Column="2" Text="{Binding Label, UpdateSourceTrigger=PropertyChanged}" Tag="Custom label"
+                                                             VerticalAlignment="Center" AutomationProperties.Name="Custom label" />
+                                                    <CheckBox Grid.Column="3" Content="Bar" IsChecked="{Binding ShowBar}" Margin="14,0,0,0" VerticalAlignment="Center"
+                                                              ToolTip="Show a fill bar for this value" />
+                                                    <CheckBox Grid.Column="4" Content="Graph" IsChecked="{Binding ShowGraph}" Margin="12,0,0,0" VerticalAlignment="Center"
+                                                              ToolTip="Show a small graph of the last moments (length under Layout)" />
+                                                    <ToggleButton Grid.Column="5" Style="{StaticResource IconToggle}" Content="&#xE713;" Width="30" Height="30" Margin="8,0,0,0"
+                                                                  IsChecked="{Binding IsExpanded}" ToolTip="More options for this sensor" AutomationProperties.Name="More options" />
+                                                    <Button Grid.Column="6" Style="{StaticResource IconButton}" Content="&#xE711;" Width="30" Height="30" Click="RemoveItem_Click"
+                                                            ToolTip="Remove" AutomationProperties.Name="Remove sensor from overlay" />
+                                                </Grid>
+                                                <!-- per-sensor options -->
+                                                <Border Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVis}}" Margin="70,8,40,4" Padding="12,10"
+                                                        Background="{DynamicResource SurfaceAltBrush}" CornerRadius="4">
+                                                    <WrapPanel>
+                                                        <StackPanel Margin="0,0,24,8">
+                                                            <TextBlock Text="VALUE COLOUR" Style="{StaticResource Overline}" Margin="0,0,0,6" />
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <local:ColorField Value="{Binding ValueColorText, Mode=TwoWay}" />
+                                                                <Button Style="{StaticResource GhostButton}" Content="Overlay's" Padding="8,4" Margin="6,0,0,0"
+                                                                        Click="ResetItemColor_Click" ToolTip="Use the overlay's value colour" />
+                                                            </StackPanel>
+                                                        </StackPanel>
+                                                        <StackPanel Margin="0,0,24,8">
+                                                            <TextBlock Text="DECIMALS" Style="{StaticResource Overline}" Margin="0,0,0,6" />
+                                                            <Border Style="{StaticResource SegmentHost}">
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <RadioButton Style="{StaticResource Segment}" Content="Auto" GroupName="{Binding SensorId}"
+                                                                                 IsChecked="{Binding Decimals, Converter={StaticResource Match}, ConverterParameter=-1}" />
+                                                                    <RadioButton Style="{StaticResource Segment}" Content="0" GroupName="{Binding SensorId}"
+                                                                                 IsChecked="{Binding Decimals, Converter={StaticResource Match}, ConverterParameter=0}" />
+                                                                    <RadioButton Style="{StaticResource Segment}" Content="1" GroupName="{Binding SensorId}"
+                                                                                 IsChecked="{Binding Decimals, Converter={StaticResource Match}, ConverterParameter=1}" />
+                                                                    <RadioButton Style="{StaticResource Segment}" Content="2" GroupName="{Binding SensorId}"
+                                                                                 IsChecked="{Binding Decimals, Converter={StaticResource Match}, ConverterParameter=2}" />
+                                                                </StackPanel>
+                                                            </Border>
+                                                        </StackPanel>
+                                                        <StackPanel Margin="0,0,24,8">
+                                                            <TextBlock Text="OWN WARNING LIMITS" Style="{StaticResource Overline}" Margin="0,0,0,6"
+                                                                       ToolTip="In the sensor's own unit (°C, %, W …). Empty = the overlay's limits for temperatures and load." />
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <TextBox Width="64" Text="{Binding WarnAt, TargetNullValue='', UpdateSourceTrigger=LostFocus}" Tag="warm"
+                                                                         AutomationProperties.Name="Warning from" ToolTip="Turns the warning colour from this value (raw unit, °C for temperatures)" />
+                                                                <TextBox Width="64" Margin="6,0,0,0" Text="{Binding HotAt, TargetNullValue='', UpdateSourceTrigger=LostFocus}" Tag="hot"
+                                                                         AutomationProperties.Name="Hot from" ToolTip="Turns the hot colour from this value (raw unit, °C for temperatures)" />
+                                                            </StackPanel>
+                                                        </StackPanel>
+                                                        <CheckBox Content="Hide the label (value only)" IsChecked="{Binding HideLabel}" Margin="0,22,0,8" VerticalAlignment="Top" />
+                                                    </WrapPanel>
+                                                </Border>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ===== Style ===== -->
+                    <StackPanel x:Name="StyleTab" Visibility="Collapsed">
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="Start from a look" Style="{StaticResource H2}" />
+                                <TextBlock Text="Changes colours, fonts and the panel. Your sensors and position stay." Style="{StaticResource Muted}" Margin="0,-6,0,10" />
+                                <WrapPanel x:Name="StylePresets" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="Text" Style="{StaticResource H2}" />
+                                <Grid Style="{StaticResource RowGrid}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Label font" Style="{StaticResource FieldLabel}" />
+                                    <ComboBox x:Name="FontBox" Grid.Column="1" SelectedValue="{Binding FontFamily}" SelectedValuePath="Tag" IsTextSearchEnabled="True"
+                                              AutomationProperties.Name="Label font" MaxWidth="320" HorizontalAlignment="Left" MinWidth="240" />
+                                </Grid>
+                                <Grid Style="{StaticResource RowGrid}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Number font" Style="{StaticResource FieldLabel}" />
+                                    <ComboBox x:Name="ValueFontBox" Grid.Column="1" SelectedValue="{Binding ValueFontFamily}" SelectedValuePath="Tag" IsTextSearchEnabled="True"
+                                              AutomationProperties.Name="Number font" MaxWidth="320" HorizontalAlignment="Left" MinWidth="240" />
+                                </Grid>
+                                <Grid Style="{StaticResource RowGrid}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="64" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Size" Style="{StaticResource FieldLabel}" />
+                                    <Slider Grid.Column="1" Minimum="8" Maximum="40" TickFrequency="1" VerticalAlignment="Center" Value="{Binding FontSize}"
+                                            AutomationProperties.Name="Font size" />
+                                    <TextBlock Grid.Column="2" Text="{Binding FontSize, StringFormat={}{0:0} pt}" Style="{StaticResource ValueText}" />
+                                </Grid>
+                                <Grid Style="{StaticResource RowGrid}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="64" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Numbers bigger by" Style="{StaticResource FieldLabel}" />
+                                    <Slider Grid.Column="1" Minimum="0.7" Maximum="3" TickFrequency="0.05" VerticalAlignment="Center" Value="{Binding ValueScale}"
+                                            AutomationProperties.Name="Number size" />
+                                    <TextBlock Grid.Column="2" Text="{Binding ValueScale, StringFormat={}{0:0.00}×}" Style="{StaticResource ValueText}" />
+                                </Grid>
+                                <Grid Style="{StaticResource RowGrid}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Label weight" Style="{StaticResource FieldLabel}" />
+                                    <Border Grid.Column="1" Style="{StaticResource SegmentHost}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <RadioButton Style="{StaticResource Segment}" Content="Regular" GroupName="LabelWeight"
+                                                         IsChecked="{Binding LabelWeight, Converter={StaticResource Match}, ConverterParameter=Normal}" />
+                                            <RadioButton Style="{StaticResource Segment}" Content="Semibold" GroupName="LabelWeight"
+                                                         IsChecked="{Binding LabelWeight, Converter={StaticResource Match}, ConverterParameter=SemiBold}" />
+                                            <RadioButton Style="{StaticResource Segment}" Content="Bold" GroupName="LabelWeight"
+                                                         IsChecked="{Binding LabelWeight, Converter={StaticResource Match}, ConverterParameter=Bold}" />
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+                                <Grid Style="{StaticResource RowGrid}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Number weight" Style="{StaticResource FieldLabel}" />
+                                    <Border Grid.Column="1" Style="{StaticResource SegmentHost}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <RadioButton Style="{StaticResource Segment}" Content="Regular" GroupName="ValueWeight"
+                                                         IsChecked="{Binding ValueWeight, Converter={StaticResource Match}, ConverterParameter=Normal}" />
+                                            <RadioButton Style="{StaticResource Segment}" Content="Semibold" GroupName="ValueWeight"
+                                                         IsChecked="{Binding ValueWeight, Converter={StaticResource Match}, ConverterParameter=SemiBold}" />
+                                            <RadioButton Style="{StaticResource Segment}" Content="Bold" GroupName="ValueWeight"
+                                                         IsChecked="{Binding ValueWeight, Converter={StaticResource Match}, ConverterParameter=Bold}" />
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Readability" Style="{StaticResource FieldLabel}" />
+                                        <TextBlock Text="Over bright scenes" Style="{StaticResource Muted}" />
+                                    </StackPanel>
+                                    <Border Grid.Column="1" Style="{StaticResource SegmentHost}" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal">
+                                            <RadioButton Style="{StaticResource Segment}" Content="Auto" GroupName="TextEffect"
+                                                         ToolTip="A shadow when the panel is mostly see-through"
+                                                         IsChecked="{Binding TextEffect, Converter={StaticResource Match}, ConverterParameter=Auto}" />
+                                            <RadioButton Style="{StaticResource Segment}" Content="None" GroupName="TextEffect"
+                                                         IsChecked="{Binding TextEffect, Converter={StaticResource Match}, ConverterParameter=None}" />
+                                            <RadioButton Style="{StaticResource Segment}" Content="Shadow" GroupName="TextEffect"
+                                                         IsChecked="{Binding TextEffect, Converter={StaticResource Match}, ConverterParameter=Shadow}" />
+                                            <RadioButton Style="{StaticResource Segment}" Content="Outline" GroupName="TextEffect"
+                                                         IsChecked="{Binding TextEffect, Converter={StaticResource Match}, ConverterParameter=Outline}" />
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="Colours" Style="{StaticResource H2}" />
+                                <UniformGrid Columns="3">
+                                    <StackPanel Margin="0,0,12,14">
+                                        <TextBlock Text="Labels" Style="{StaticResource Muted}" Margin="0,0,0,6" />
+                                        <local:ColorField Value="{Binding LabelColor}" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,12,14">
+                                        <TextBlock Text="Values" Style="{StaticResource Muted}" Margin="0,0,0,6" />
+                                        <local:ColorField Value="{Binding ValueColor}" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,12,14">
+                                        <TextBlock Text="Headers &amp; hint" Style="{StaticResource Muted}" Margin="0,0,0,6" />
+                                        <local:ColorField Value="{Binding AccentColor}" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,12,14">
+                                        <TextBlock Text="Panel" Style="{StaticResource Muted}" Margin="0,0,0,6" />
+                                        <local:ColorField Value="{Binding BackgroundColor}" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,12,14">
+                                        <TextBlock Text="Border" Style="{StaticResource Muted}" Margin="0,0,0,6" />
+                                        <local:ColorField Value="{Binding BorderColor}" />
+                                    </StackPanel>
+                                </UniformGrid>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="Panel" Style="{StaticResource H2}" />
+                                <Grid Style="{StaticResource RowGrid}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="64" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Panel opacity" Style="{StaticResource FieldLabel}" />
+                                    <Slider Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="5" VerticalAlignment="Center" Value="{Binding BackgroundOpacity}"
+                                            AutomationProperties.Name="Panel opacity" />
+                                    <TextBlock Grid.Column="2" Text="{Binding BackgroundOpacity, StringFormat={}{0} %}" Style="{StaticResource ValueText}" />
+                                </Grid>
+                                <Grid Style="{StaticResource RowGrid}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="64" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Whole overlay" Style="{StaticResource FieldLabel}" ToolTip="Fades text and panel together" />
+                                    <Slider Grid.Column="1" Minimum="20" Maximum="100" TickFrequency="5" VerticalAlignment="Center" Value="{Binding Opacity}"
+                                            AutomationProperties.Name="Overlay opacity" />
+                                    <TextBlock Grid.Column="2" Text="{Binding Opacity, StringFormat={}{0} %}" Style="{StaticResource ValueText}" />
+                                </Grid>
+                                <Grid Style="{StaticResource RowGrid}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="64" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Corner radius" Style="{StaticResource FieldLabel}" />
+                                    <Slider Grid.Column="1" Minimum="0" Maximum="24" TickFrequency="1" VerticalAlignment="Center" Value="{Binding CornerRadius}"
+                                            AutomationProperties.Name="Corner radius" />
+                                    <TextBlock Grid.Column="2" Text="{Binding CornerRadius, StringFormat={}{0} px}" Style="{StaticResource ValueText}" />
+                                </Grid>
+                                <Grid Style="{StaticResource RowGrid}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="64" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Border" Style="{StaticResource FieldLabel}" />
+                                    <Slider Grid.Column="1" Minimum="0" Maximum="4" TickFrequency="1" VerticalAlignment="Center" Value="{Binding BorderThickness}"
+                                            AutomationProperties.Name="Border thickness" />
+                                    <TextBlock Grid.Column="2" Text="{Binding BorderThickness, Converter={StaticResource Num}, ConverterParameter=' px|None'}" Style="{StaticResource ValueText}" />
+                                </Grid>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="64" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Padding" Style="{StaticResource FieldLabel}" />
+                                    <Slider Grid.Column="1" Minimum="0" Maximum="32" TickFrequency="1" VerticalAlignment="Center" Value="{Binding Padding}"
+                                            AutomationProperties.Name="Padding" />
+                                    <TextBlock Grid.Column="2" Text="{Binding Padding, StringFormat={}{0} px}" Style="{StaticResource ValueText}" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- ===== Layout ===== -->
+                    <Border x:Name="LayoutTab" Style="{StaticResource Card}" Margin="0" Visibility="Collapsed">
+                        <StackPanel>
+                            <Grid Style="{StaticResource RowGrid}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="150" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Arrangement" Style="{StaticResource FieldLabel}" />
+                                <Border Grid.Column="1" Style="{StaticResource SegmentHost}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <RadioButton Style="{StaticResource Segment}" Content="List" GroupName="Layout"
+                                                     IsChecked="{Binding Layout, Converter={StaticResource Match}, ConverterParameter=Vertical}" />
+                                        <RadioButton Style="{StaticResource Segment}" Content="One line" GroupName="Layout"
+                                                     IsChecked="{Binding Layout, Converter={StaticResource Match}, ConverterParameter=Horizontal}" />
+                                        <RadioButton Style="{StaticResource Segment}" Content="Tiles" GroupName="Layout"
+                                                     IsChecked="{Binding Layout, Converter={StaticResource Match}, ConverterParameter=Grid}" />
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                            <Grid Style="{StaticResource RowGrid}" Visibility="{Binding Layout, Converter={StaticResource MatchVis}, ConverterParameter=Grid}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="150" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="64" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Tiles per row" Style="{StaticResource FieldLabel}" />
+                                <Slider Grid.Column="1" Minimum="1" Maximum="6" TickFrequency="1" VerticalAlignment="Center" Value="{Binding Columns}"
+                                        AutomationProperties.Name="Tiles per row" />
+                                <TextBlock Grid.Column="2" Text="{Binding Columns}" Style="{StaticResource ValueText}" />
+                            </Grid>
+                            <Grid Style="{StaticResource RowGrid}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="150" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="64" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Row spacing" Style="{StaticResource FieldLabel}" />
+                                <Slider Grid.Column="1" Minimum="0" Maximum="16" TickFrequency="1" VerticalAlignment="Center" Value="{Binding RowSpacing}"
+                                        AutomationProperties.Name="Row spacing" />
+                                <TextBlock Grid.Column="2" Text="{Binding RowSpacing, StringFormat={}{0} px}" Style="{StaticResource ValueText}" />
+                            </Grid>
+                            <Grid Style="{StaticResource RowGrid}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="150" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="64" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Item spacing" Style="{StaticResource FieldLabel}" ToolTip="Gap between items in the one-line and tile layouts" />
+                                <Slider Grid.Column="1" Minimum="0" Maximum="40" TickFrequency="1" VerticalAlignment="Center" Value="{Binding ItemSpacing}"
+                                        AutomationProperties.Name="Item spacing" />
+                                <TextBlock Grid.Column="2" Text="{Binding ItemSpacing, StringFormat={}{0} px}" Style="{StaticResource ValueText}" />
+                            </Grid>
+                            <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding ShowHeaders}" Content="Hardware headers (CPU, GPU …)" />
+                            <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding ShowUnits}" Content="Units after values (°C, %, MHz)" />
+                            <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding ValuesRight}" Content="Values in a right-aligned column (list layout)" />
+
+                            <TextBlock Text="BARS &amp; GRAPHS" Style="{StaticResource SectionLabel}" Margin="0,14,0,10" />
+                            <Grid Style="{StaticResource RowGrid}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="150" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="64" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Bar thickness" Style="{StaticResource FieldLabel}" />
+                                <Slider Grid.Column="1" Minimum="0" Maximum="12" TickFrequency="1" VerticalAlignment="Center" Value="{Binding BarHeight}"
+                                        AutomationProperties.Name="Bar thickness" />
+                                <TextBlock Grid.Column="2" Text="{Binding BarHeight, Converter={StaticResource Num}, ConverterParameter=' px|Auto'}" Style="{StaticResource ValueText}" />
+                            </Grid>
+                            <Grid Style="{StaticResource RowGrid}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="150" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Bar colour" Style="{StaticResource FieldLabel}" />
+                                <Border Grid.Column="1" Style="{StaticResource SegmentHost}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <RadioButton Style="{StaticResource Segment}" Content="Like the value" GroupName="BarColor"
+                                                     ToolTip="Turns yellow/red with warnings"
+                                                     IsChecked="{Binding BarColor, Converter={StaticResource Match}, ConverterParameter=Value}" />
+                                        <RadioButton Style="{StaticResource Segment}" Content="Header colour" GroupName="BarColor"
+                                                     IsChecked="{Binding BarColor, Converter={StaticResource Match}, ConverterParameter=Accent}" />
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                            <Grid Style="{StaticResource RowGrid}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="150" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="64" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Graph length" Style="{StaticResource FieldLabel}" />
+                                <Slider Grid.Column="1" Minimum="15" Maximum="600" TickFrequency="15" VerticalAlignment="Center" Value="{Binding GraphSeconds}"
+                                        AutomationProperties.Name="Graph length in seconds" />
+                                <TextBlock Grid.Column="2" Text="{Binding GraphSeconds, StringFormat={}{0} s}" Style="{StaticResource ValueText}" />
+                            </Grid>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="150" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="64" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Graph width" Style="{StaticResource FieldLabel}" />
+                                <Slider Grid.Column="1" Minimum="30" Maximum="200" TickFrequency="10" VerticalAlignment="Center" Value="{Binding GraphWidth}"
+                                        AutomationProperties.Name="Graph width" />
+                                <TextBlock Grid.Column="2" Text="{Binding GraphWidth, StringFormat={}{0} px}" Style="{StaticResource ValueText}" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ===== Position ===== -->
+                    <Border x:Name="PositionTab" Style="{StaticResource Card}" Margin="0" Visibility="Collapsed">
+                        <StackPanel>
+                            <TextBlock Text="Where it sits" Style="{StaticResource H2}" />
+                            <TextBlock Style="{StaticResource Muted}" Margin="0,-6,0,12"
+                                       Text="Pin it to a corner or edge so it stays put when the resolution changes, or choose Free and drag it (unlock it first)." />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="24" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border Style="{StaticResource SegmentHost}" Padding="6,6,2,2" VerticalAlignment="Top">
+                                    <UniformGrid x:Name="AnchorGrid" Columns="3" Rows="3" />
+                                </Border>
+                                <StackPanel Grid.Column="2">
+                                    <Grid Style="{StaticResource RowGrid}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="110" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Monitor" Style="{StaticResource FieldLabel}" />
+                                        <ComboBox x:Name="MonitorBox" Grid.Column="1" SelectedValue="{Binding Monitor}" SelectedValuePath="Tag"
+                                                  AutomationProperties.Name="Monitor" HorizontalAlignment="Left" MinWidth="240" />
+                                    </Grid>
+                                    <Grid Style="{StaticResource RowGrid}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="110" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="64" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="From the edge" Style="{StaticResource FieldLabel}" />
+                                        <Slider Grid.Column="1" Minimum="0" Maximum="200" TickFrequency="2" VerticalAlignment="Center" Value="{Binding EdgeMargin}"
+                                                AutomationProperties.Name="Distance from the edge" />
+                                        <TextBlock Grid.Column="2" Text="{Binding EdgeMargin, StringFormat={}{0} px}" Style="{StaticResource ValueText}" />
+                                    </Grid>
+                                    <Button Content="Reset size to fit the content" HorizontalAlignment="Left" Click="FitSize_Click" />
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ===== Warnings ===== -->
+                    <Border x:Name="WarningsTab" Style="{StaticResource Card}" Margin="0" Visibility="Collapsed">
+                        <StackPanel>
+                            <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding WarnColors}">
+                                <StackPanel>
+                                    <TextBlock Text="Warning colours" />
+                                    <TextBlock Text="Values change colour when they pass these limits. Single sensors can have their own (Sensors → ⚙)." Style="{StaticResource Muted}" />
+                                </StackPanel>
+                            </CheckBox>
+                            <UniformGrid Columns="2" Margin="0,10,0,14">
+                                <StackPanel Margin="0,0,12,0">
+                                    <TextBlock Text="Warm colour" Style="{StaticResource Muted}" Margin="0,0,0,6" />
+                                    <local:ColorField Value="{Binding WarmColor}" />
+                                </StackPanel>
+                                <StackPanel>
+                                    <TextBlock Text="Hot colour" Style="{StaticResource Muted}" Margin="0,0,0,6" />
+                                    <local:ColorField Value="{Binding HotColor}" />
+                                </StackPanel>
+                            </UniformGrid>
+                            <Grid Style="{StaticResource RowGrid}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="170" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="64" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Temperature warm from" Style="{StaticResource FieldLabel}" />
+                                <Slider x:Name="WarmTempSlider" Grid.Column="1" Minimum="30" Maximum="230" TickFrequency="1" VerticalAlignment="Center"
+                                        Value="{Binding WarmTemp, Converter={StaticResource Temp}}" AutomationProperties.Name="Temperature warm from" />
+                                <TextBlock Grid.Column="2" Style="{StaticResource ValueText}">
+                                    <Run Text="{Binding Value, ElementName=WarmTempSlider, StringFormat={}{0:0}, Mode=OneWay}" /><Run x:Name="TempUnit1" Text=" °C" />
+                                </TextBlock>
+                            </Grid>
+                            <Grid Style="{StaticResource RowGrid}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="170" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="64" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Temperature hot from" Style="{StaticResource FieldLabel}" />
+                                <Slider x:Name="HotTempSlider" Grid.Column="1" Minimum="30" Maximum="230" TickFrequency="1" VerticalAlignment="Center"
+                                        Value="{Binding HotTemp, Converter={StaticResource Temp}}" AutomationProperties.Name="Temperature hot from" />
+                                <TextBlock Grid.Column="2" Style="{StaticResource ValueText}">
+                                    <Run Text="{Binding Value, ElementName=HotTempSlider, StringFormat={}{0:0}, Mode=OneWay}" /><Run x:Name="TempUnit2" Text=" °C" />
+                                </TextBlock>
+                            </Grid>
+                            <Grid Style="{StaticResource RowGrid}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="170" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="64" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Load warm from" Style="{StaticResource FieldLabel}" />
+                                <Slider Grid.Column="1" Minimum="10" Maximum="100" TickFrequency="1" VerticalAlignment="Center" Value="{Binding WarmLoad}"
+                                        AutomationProperties.Name="Load warm from" />
+                                <TextBlock Grid.Column="2" Text="{Binding WarmLoad, StringFormat={}{0:0} %}" Style="{StaticResource ValueText}" />
+                            </Grid>
+                            <Grid Style="{StaticResource RowGrid}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="170" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="64" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Load hot from" Style="{StaticResource FieldLabel}" />
+                                <Slider Grid.Column="1" Minimum="10" Maximum="100" TickFrequency="1" VerticalAlignment="Center" Value="{Binding HotLoad}"
+                                        AutomationProperties.Name="Load hot from" />
+                                <TextBlock Grid.Column="2" Text="{Binding HotLoad, StringFormat={}{0:0} %}" Style="{StaticResource ValueText}" />
+                            </Grid>
+                            <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding ClockSeconds}" Content="Seconds on time zone clocks" Margin="0,10,0,0" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </ScrollViewer>
+        </DockPanel>
+    </Grid>
+</UserControl>

@@ -9,11 +9,13 @@ namespace Kelvra;
 public static class ThemeManager
 {
     private static string _mode = "System";
+    private static string _accent = Accents.Default;
 
     public static bool IsDark { get; private set; } = true;
 
-    public static void Initialize(string mode)
+    public static void Initialize(string mode, string accent)
     {
+        _accent = accent;
         SystemEvents.UserPreferenceChanged += (_, e) =>
         {
             if (e.Category == UserPreferenceCategory.General && _mode == "System")
@@ -21,6 +23,17 @@ public static class ThemeManager
         };
         Apply(mode);
     }
+
+    /// <summary>Switches the accent colour (Settings → Appearance) without touching the light/dark choice.</summary>
+    public static void ApplyAccent(string accent)
+    {
+        _accent = accent;
+        Accents.Apply(Application.Current.Resources, _accent, IsDark);
+        AccentChanged?.Invoke();
+    }
+
+    /// <summary>Raised after the theme or accent changed (code-drawn controls repaint).</summary>
+    public static event Action? AccentChanged;
 
     public static void Apply(string mode)
     {
@@ -39,6 +52,8 @@ public static class ThemeManager
             Source = new Uri($"pack://application:,,,/Themes/{(dark ? "Dark" : "Light")}.xaml"),
         };
         merged[0] = dict; // index 0 is always the colour dictionary (see App.xaml)
+        Accents.Apply(Application.Current.Resources, _accent, dark);
+        AccentChanged?.Invoke();
 
         foreach (Window w in Application.Current.Windows)
             ApplyTitleBar(w);

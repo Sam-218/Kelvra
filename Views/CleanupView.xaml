@@ -22,7 +22,7 @@
             </Grid>
             <Rectangle DockPanel.Dock="Top" Height="1" Fill="{DynamicResource LineBrush}" Margin="6,0" />
 
-            <Border x:Name="ResultBar" DockPanel.Dock="Bottom" Background="{DynamicResource AccentSoftBrush}" CornerRadius="8"
+            <Border x:Name="ResultBar" DockPanel.Dock="Bottom" Background="{DynamicResource AccentSoftBrush}" CornerRadius="6"
                     Padding="12,8" Margin="6,8,6,2" Visibility="Collapsed">
                 <TextBlock x:Name="ResultText" TextWrapping="Wrap" />
             </Border>
@@ -45,7 +45,7 @@
                             </Grid.ColumnDefinitions>
                             <CheckBox IsChecked="{Binding Selected}" VerticalAlignment="Center" Click="Check_Click"
                                       AutomationProperties.Name="{Binding Name}" />
-                            <Border Grid.Column="1" Width="34" Height="34" CornerRadius="8" Margin="12,0,12,0"
+                            <Border Grid.Column="1" Width="34" Height="34" CornerRadius="6" Margin="12,0,12,0"
                                     Background="{DynamicResource AccentSoftBrush}">
                                 <TextBlock Text="{Binding Icon}" Style="{StaticResource Icon}" FontSize="15" HorizontalAlignment="Center"
                                            Foreground="{DynamicResource AccentBrush}" />

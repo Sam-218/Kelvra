@@ -26,6 +26,7 @@ public sealed class SensorVm : ObservableObject
         OverlayLabel = r.OverlayLabel;
         Category = SensorCategories.HardwareCategory(r.HardwareType);
         TypeCategory = SensorCategories.TypeCategory(r.Type);
+        Controllable = r.Controllable;
         Update(r);
     }
 
@@ -62,6 +63,9 @@ public sealed class SensorVm : ObservableObject
 
     /// <summary>0 = normal, 1 = warm, 2 = hot (colours overlay values when warning colours are on).</summary>
     public int Level { get => _level; private set => Set(ref _level, value); }
+
+    /// <summary>A fan/pump output Kelvra can drive (Fans page).</summary>
+    public bool Controllable { get; }
 
     public bool IsGpu => HardwareType is HardwareType.GpuNvidia or HardwareType.GpuAmd or HardwareType.GpuIntel;
 

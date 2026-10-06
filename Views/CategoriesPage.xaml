@@ -17,7 +17,7 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <Border Width="38" Height="38" CornerRadius="10" Background="{DynamicResource AccentSoftBrush}">
+                        <Border Width="38" Height="38" CornerRadius="6" Background="{DynamicResource AccentSoftBrush}">
                             <TextBlock Text="{Binding Icon}" Style="{StaticResource Icon}" FontSize="18" HorizontalAlignment="Center"
                                        Foreground="{DynamicResource AccentBrush}" />
                         </Border>

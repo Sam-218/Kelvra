@@ -49,7 +49,7 @@
                                                PreviewMouseLeftButtonDown="Grip_MouseDown" MouseMove="Grip_MouseMove">
                                         <TextBlock DockPanel.Dock="Right" Text="&#xE700;" Style="{StaticResource Icon}" FontSize="13"
                                                    VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}" />
-                                        <Border Width="32" Height="32" CornerRadius="8" Background="{DynamicResource AccentSoftBrush}">
+                                        <Border Width="32" Height="32" CornerRadius="6" Background="{DynamicResource AccentSoftBrush}">
                                             <TextBlock Text="{Binding Icon}" Style="{StaticResource Icon}" FontSize="15" HorizontalAlignment="Center"
                                                        Foreground="{DynamicResource AccentBrush}" />
                                         </Border>

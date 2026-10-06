@@ -280,4 +280,17 @@ public partial class SensorsPage : UserControl
     }
 
     private void BannerInstall_Click(object sender, RoutedEventArgs e) => InstallPawnIoRequested?.Invoke();
+
+    private async void ResetMinMax_Click(object sender, RoutedEventArgs e)
+    {
+        ResetMinMaxButton.IsEnabled = false;
+        try
+        {
+            await _app.Sensors.ResetMinMaxAsync(); // the new min/max show with the next poll
+        }
+        finally
+        {
+            ResetMinMaxButton.IsEnabled = true;
+        }
+    }
 }

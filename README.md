@@ -12,36 +12,47 @@
 ## Features
 
 **Monitoring**
+- **Overview** – an instrument panel per CPU and GPU (temperature, load, clock, power with their min–max and a graph), the sensors you pinned with a trend line each, and memory / system drive / network at a glance.
 - **Sensors** – every sensor LibreHardwareMonitor can read (CPU, GPU, RAM, motherboard, drives, network…) with current / min / max, search, filter chips, foldable device groups you can reorder by drag & drop, and sortable columns.
 - **Categories** – one tile per hardware type and sensor type with a live headline (e.g. *GPU 47 °C · 2 %*, *Hottest 55 °C*). Click to filter.
-- **History** – graphs of the last hour (1 min / 5 min / 15 min / 1 h) for everything, a category, or your own selection. Hover for exact values.
+- **History** – graphs of up to 24 hours (every second for the last hour, one-minute averages before that) for everything, a category, or your own selection. Hover for exact values. Optionally kept on disk so graphs survive a restart. *Reset min/max* on the Sensors page starts the extremes over.
 - **CSV logging** – record whatever you're graphing to a CSV file.
-- **Alerts** – Windows notifications when a sensor stays above/below a limit (e.g. *GPU hotter than 85 °C for 5 s*), with cooldown and sound.
+- **Alerts** – Windows toast notifications (Action Center) when a sensor stays above/below a limit (e.g. *GPU hotter than 85 °C for 5 s*), with cooldown and sound.
 - **System summary** – Windows version, CPU, GPU & driver, RAM sticks, board & BIOS, drive health (SMART) and network in one page – with a *Copy summary* button for forum posts.
-- °C / °F, dark / light / system theme.
+- **Mini mode** – a small, optionally always-on-top window with CPU, GPU, memory and network, for a second screen.
+- °C / °F, dark / light / system theme, seven accent colours.
+
+**Fan control**
+- Per fan output: *Automatic* (BIOS/driver), a *fixed speed*, or a *curve* that follows any temperature sensor – drag the points, or type them.
+- Safety built in: a minimum speed, 100 % above a critical temperature, gentle slow-down with hysteresis, and fans go back to BIOS control when Kelvra exits, crashes, you sign out, or the temperature sensor disappears.
+- Motherboard fans need administrator rights and the PawnIO driver; some laptops and ready-made PCs don't allow software fan control.
 
 **In-game overlays**
-- As many on-screen overlays as you like, each with its own sensors, position, font, colours, opacity, corner radius, vertical or one-line layout, custom labels and progress bars.
-- Click-through while locked; `Ctrl+Shift+L` unlocks them for dragging, `Ctrl+Shift+O` shows/hides them.
-- Templates: Essentials, Temperatures, Compact bar.
+- As many on-screen overlays as you like, edited with a live, real-size preview over dark, bright or busy test backgrounds.
+- Looks: *Instrument*, *Minimal*, *Classic*, *Glass*, *Neon* or the original – then any installed font (separate font for numbers), weights, sizes, colours, border, panel and overall opacity, corner radius, padding, and a shadow or outline for bright scenes.
+- Layouts: list, one line, or tiles in up to six columns, with adjustable spacing, headers and units.
+- Per sensor: custom label (or none), its own colour, decimal places, a fill bar, a mini graph, and its own warning limits; warning colours and limits per overlay.
+- Position: drag it anywhere, or pin it to any corner or edge of any monitor.
+- Click-through while locked; `Ctrl+Alt+F11` unlocks them for dragging, `Ctrl+Alt+F10` shows/hides them. Both shortcuts can be changed (or turned off) under *Settings → Shortcuts*, which also warns when another program uses the same keys.
+- Templates: Essentials, Temperatures, Compact bar. Export an overlay to a `.kelvra-overlay.json` file and import ones others shared.
 
 **PC tools**
 - **Disk analyzer** – WizTree-style folder tree, file-type breakdown, largest files and a labelled, zoomable treemap. Right-click → open, show in Explorer, move to Recycle Bin.
 - **Cleanup** – temp files, NVIDIA/AMD/DirectX shader caches, Windows Update leftovers, crash dumps, browser caches, Recycle Bin. Files in use are skipped.
 - **Duplicate finder** – identical files by content (size → partial hash → SHA-256), hard links recognised; extra copies go to the Recycle Bin.
 - **Processes** – live CPU / memory / disk per process, end task, open file location.
-- **Startup apps** – enable/disable what starts with Windows (same switch as Task Manager).
+- **Startup apps** – enable/disable what starts with Windows (same switch as Task Manager), plus scheduled tasks that run at sign-in, which Task Manager doesn't list.
 - **Start with Windows** – Kelvra itself can start minimised in the tray.
 
 ## Screenshots
 
-| Categories | History |
+| Overview | Fan control |
 |---|---|
-| ![Categories](docs/screenshots/categories.png) | ![History](docs/screenshots/history.png) |
+| ![Overview](docs/screenshots/overview.png) | ![Fans](docs/screenshots/fans.png) |
 
-| Overlay editor |
-|---|
-| ![Overlays](docs/screenshots/overlays.png) |
+| Overlay editor | History |
+|---|---|
+| ![Overlay editor](docs/screenshots/overlays.png) | ![History](docs/screenshots/history.png) |
 
 ## Download
 
@@ -79,8 +90,8 @@ Assets/      app icon
 tests/       xUnit tests (logic, disk tools, safety and security checks)
 ```
 
-Settings are stored in `%APPDATA%\Kelvra\settings.json`; CSV logs go to `Documents\Kelvra Logs`.
-Kelvra has no telemetry and makes no network connections of its own.
+Settings are stored in `%APPDATA%\Kelvra\settings.json` (saved history in `history.bin` next to it, a small error log in `logs\`); CSV logs go to `Documents\Kelvra Logs`.
+Kelvra has no telemetry and makes no network connections of its own. *Settings → About → Copy diagnostics* puts versions, detected hardware and the end of the log on your clipboard for a bug report (your user name is removed); nothing is sent anywhere.
 
 ## Uninstall
 

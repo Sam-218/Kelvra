@@ -12,7 +12,7 @@
                      Tag="Search sensors…" TextChanged="SearchBox_TextChanged" />
         </Grid>
 
-        <Border x:Name="WarningBanner" DockPanel.Dock="Top" Background="{DynamicResource WarnSoftBrush}" CornerRadius="10"
+        <Border x:Name="WarningBanner" DockPanel.Dock="Top" Background="{DynamicResource WarnSoftBrush}" CornerRadius="6"
                 Padding="14,10" Margin="0,0,0,14" Visibility="Collapsed">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -35,6 +35,13 @@
             </Grid.ColumnDefinitions>
             <WrapPanel x:Name="ChipPanel" />
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                <Button x:Name="ResetMinMaxButton" Style="{StaticResource GhostButton}" Padding="10,5" Click="ResetMinMax_Click"
+                        ToolTip="Start every sensor's minimum and maximum over from now" AutomationProperties.Name="Reset min and max">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE777;" Style="{StaticResource Icon}" FontSize="11" Margin="0,0,6,0" />
+                        <TextBlock Text="Reset min/max" FontSize="12" />
+                    </StackPanel>
+                </Button>
                 <Button x:Name="ResetOrderButton" Style="{StaticResource GhostButton}" Padding="10,5" Click="ResetOrder_Click"
                         ToolTip="Put devices back in their original order" AutomationProperties.Name="Reset order" Visibility="Collapsed">
                     <StackPanel Orientation="Horizontal">
@@ -156,11 +163,11 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                                     <TextBlock Grid.Column="1" Text="{Binding TypeLabel}" Style="{StaticResource Muted}" VerticalAlignment="Center" />
-                                    <TextBlock x:Name="Val" Grid.Column="2" Text="{Binding ValueText}" FontWeight="SemiBold"
+                                    <TextBlock x:Name="Val" Grid.Column="2" Text="{Binding ValueText}" Style="{StaticResource Mono}"
                                                HorizontalAlignment="Right" VerticalAlignment="Center" />
-                                    <TextBlock Grid.Column="3" Text="{Binding MinText}" Foreground="{DynamicResource MutedBrush}"
+                                    <TextBlock Grid.Column="3" Text="{Binding MinText}" Style="{StaticResource Mono}" Foreground="{DynamicResource MutedBrush}"
                                                HorizontalAlignment="Right" VerticalAlignment="Center" />
-                                    <TextBlock Grid.Column="4" Text="{Binding MaxText}" Foreground="{DynamicResource MutedBrush}"
+                                    <TextBlock Grid.Column="4" Text="{Binding MaxText}" Style="{StaticResource Mono}" Foreground="{DynamicResource MutedBrush}"
                                                HorizontalAlignment="Right" VerticalAlignment="Center" />
                                     <Button Grid.Column="5" Style="{StaticResource IconButton}" AutomationProperties.Name="Add to the selected overlay" Content="&#xE710;" HorizontalAlignment="Right"
                                             Width="26" Height="26" Click="AddSensor_Click" ToolTip="Add to the selected overlay" />

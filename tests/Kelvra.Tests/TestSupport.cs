@@ -5,6 +5,13 @@ using LibreHardwareMonitor.Hardware;
 
 namespace Kelvra.Tests;
 
+internal static class TestSetup
+{
+    /// <summary>Keeps test runs out of the real %APPDATA%\Kelvra\logs.</summary>
+    [System.Runtime.CompilerServices.ModuleInitializer]
+    internal static void RedirectLog() => Log.Folder = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "kelvra-tests-log");
+}
+
 /// <summary>A throw-away folder under %TEMP% that cleans up after itself (read-only files and junctions included).</summary>
 public sealed class TempDir : IDisposable
 {

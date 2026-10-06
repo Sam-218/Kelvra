@@ -11,7 +11,7 @@ namespace Kelvra;
 /// </summary>
 public static class Autostart
 {
-    private const string TaskName = "Kelvra";
+    internal const string TaskName = "Kelvra";
     private const string OldTaskName = "SysMonitor"; // name before the rename
     public const string MinimizedArg = "--minimized";
 
@@ -93,9 +93,18 @@ public static class Autostart
             RedirectStandardOutput = true,
         };
         using var p = Process.Start(psi)!;
-        error = p.StandardError.ReadToEnd().Trim();
-        p.StandardOutput.ReadToEnd();
-        p.WaitForExit(10_000);
+        // Read both pipes at once: reading one to the end first can deadlock if the other fills up
+        var stderr = p.StandardError.ReadToEndAsync();
+        var stdout = p.StandardOutput.ReadToEndAsync();
+        if (!p.WaitForExit(10_000))
+        {
+            try { p.Kill(); } catch (InvalidOperationException) { /* exited just now */ }
+            error = "schtasks.exe didn't respond within 10 seconds.";
+            return -1;
+        }
+        Task.WaitAll(stderr, stdout);
+        error = stderr.Result.Trim();
+        if (error.Length == 0 && p.ExitCode != 0) error = stdout.Result.Trim();
         return p.ExitCode;
     }
 }

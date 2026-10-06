@@ -144,7 +144,7 @@ public sealed class ChartControl : FrameworkElement
         DrawLabel(dc, FormatAxis(type, hi), muted, 2, 1, dip);
         DrawLabel(dc, FormatAxis(type, lo), muted, 2, h - 14, dip);
 
-        var now = DateTime.Now;
+        var now = DateTime.UtcNow; // history times are UTC
         double windowSec = item.Window.TotalSeconds;
         double X(DateTime t) => w - (now - t).TotalSeconds / windowSec * w;
         double Y(float raw) => h - (SensorFormat.ToDisplay(type, raw) - lo) / (hi - lo) * h;
@@ -213,7 +213,7 @@ public sealed class ChartControl : FrameworkElement
         dc.DrawLine(new Pen(muted, 1), new Point(px, 0), new Point(px, ActualHeight));
         dc.DrawEllipse(item.Brush, new Pen(Brushes.White, 1.5), new Point(px, py), 4, 4);
 
-        var text = new FormattedText($"{SensorFormat.Format(item.Sensor.Type, b.Value)}  ·  {b.Time:HH:mm:ss}",
+        var text = new FormattedText($"{SensorFormat.Format(item.Sensor.Type, b.Value)}  ·  {b.Time.ToLocalTime():HH:mm:ss}",
             CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, Face, 11,
             TryFindResource("TextBrush") as Brush ?? Brushes.White, dip);
         double tx = Math.Clamp(px - text.Width / 2, 2, ActualWidth - text.Width - 2);

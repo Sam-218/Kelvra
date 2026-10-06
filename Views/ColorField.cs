@@ -140,6 +140,9 @@ public sealed class MatchConverter : IValueConverter
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         if (value is not true || parameter == null) return Binding.DoNothing;
-        return targetType.IsEnum ? Enum.Parse(targetType, parameter.ToString()!) : parameter.ToString()!;
+        string text = parameter.ToString()!;
+        if (targetType.IsEnum) return Enum.Parse(targetType, text);
+        var type = Nullable.GetUnderlyingType(targetType) ?? targetType;
+        return type == typeof(string) ? text : System.Convert.ChangeType(text, type, CultureInfo.InvariantCulture); // ints, doubles …
     }
 }

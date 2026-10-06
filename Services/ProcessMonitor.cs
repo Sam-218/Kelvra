@@ -142,9 +142,8 @@ public sealed class ProcessMonitor
     {
         if (_fileInfo.TryGetValue(path, out var info)) return info;
         string desc = "";
-        ImageSource? icon = null;
         try { desc = FileVersionInfo.GetVersionInfo(path).FileDescription ?? ""; } catch { /* no version info */ }
-        icon = IconFor(path);
+        var icon = IconFor(path);
         return _fileInfo[path] = (desc.Trim(), icon);
     }
 

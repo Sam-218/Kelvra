@@ -20,10 +20,14 @@ public sealed class AppSettings
 
     /// <summary>"System", "Dark" or "Light".</summary>
     public string Theme { get; set; } = "System";
+    /// <summary>One of <see cref="Accents.All"/> by name.</summary>
+    public string Accent { get; set; } = Accents.Default;
     public int RefreshMs { get; set; } = 1000;
     public bool OverlaysVisible { get; set; } = true;
     public bool StartMinimized { get; set; }
     public bool CloseToTray { get; set; }
+    /// <summary>The minimise button hides Kelvra in the tray instead of leaving it on the taskbar.</summary>
+    public bool MinimizeToTray { get; set; }
     public bool DefaultsApplied { get; set; }
     public bool PawnIoPromptDismissed { get; set; }
 
@@ -42,6 +46,8 @@ public sealed class AppSettings
     public List<string> HistorySelected { get; set; } = new();
     public int HistoryMinutes { get; set; } = 5;
     public int LogIntervalSeconds { get; set; } = 1;
+    /// <summary>Save the last 24 h of one-minute history to disk, so graphs survive a restart.</summary>
+    public bool KeepHistory { get; set; }
 
     // Disk cleanup / duplicates
     /// <summary>Cleanup items the user unticked. The Recycle Bin starts unticked.</summary>
@@ -58,6 +64,24 @@ public sealed class AppSettings
     public string? SensorSortKey { get; set; }
     public bool SensorSortDescending { get; set; }
     public ObservableCollection<OverlayProfile> Overlays { get; set; } = new();
+
+    /// <summary>Fan outputs Kelvra drives (Fans page). Fans without a profile stay under BIOS control.</summary>
+    public List<FanProfile> Fans { get; set; } = new();
+
+    // Mini window (null position = next to the main window's screen corner)
+    public bool MiniOpen { get; set; }
+    public bool MiniTopmost { get; set; } = true;
+    public double? MiniLeft { get; set; }
+    public double? MiniTop { get; set; }
+    public double MiniWidth { get; set; } = 340;
+    public double MiniHeight { get; set; } = 620;
+
+    // Global shortcuts ("" = off). The old Ctrl+Shift+O/L took those keys away from Chrome, Excel and VS Code.
+    public string HotkeyOverlays { get; set; } = Hotkey.DefaultOverlays;
+    public string HotkeyLock { get; set; } = Hotkey.DefaultLock;
+
+    /// <summary>Why the last save failed (null = it worked). The app tells the user once per new error.</summary>
+    [JsonIgnore] public string? LastSaveError { get; private set; }
 
     /// <summary>
     /// Set when settings.json couldn't be read. The broken file was renamed to this path instead of being overwritten,
@@ -116,10 +140,13 @@ public sealed class AppSettings
     internal void Repair()
     {
         RefreshMs = Math.Clamp(RefreshMs, 250, 5000);
-        if (HistoryMinutes is not (1 or 5 or 15 or 60)) HistoryMinutes = 5;
+        if (HistoryMinutes is not (1 or 5 or 15 or 60 or 360 or 1440)) HistoryMinutes = 5;
+        if (HotkeyOverlays is null || (HotkeyOverlays.Length > 0 && !Hotkey.TryParse(HotkeyOverlays, out _))) HotkeyOverlays = Hotkey.DefaultOverlays;
+        if (HotkeyLock is null || (HotkeyLock.Length > 0 && !Hotkey.TryParse(HotkeyLock, out _))) HotkeyLock = Hotkey.DefaultLock;
         if (LogIntervalSeconds is not (1 or 5 or 10 or 60)) LogIntervalSeconds = 1;
         if (DuplicateMinSizeMb is not (1 or 10 or 100)) DuplicateMinSizeMb = 1;
         Theme ??= "System";
+        if (!Accents.IsKnown(Accent)) Accent = Accents.Default;
         HistoryMode ??= "Category";
         HistoryCategory ??= "hw:CPU";
         Alerts ??= new();
@@ -131,6 +158,8 @@ public sealed class AppSettings
         SystemCardOrder ??= new();
         RemoveNulls(Alerts);
         RemoveNulls(Overlays);
+        Fans = (Fans ?? new()).Where(f => f != null && !string.IsNullOrEmpty(f.ControlId)).GroupBy(f => f.ControlId).Select(g => g.First()).ToList();
+        foreach (var f in Fans) FanCurve.Repair(f);
     }
 
     private static void RemoveNulls<T>(ObservableCollection<T> list)
@@ -148,9 +177,10 @@ public sealed class AppSettings
         File.Copy(old, FilePath);
     }
 
-    public void Save() => Save(FilePath);
+    /// <summary>Writes settings.json. Returns false (and sets <see cref="LastSaveError"/>) if it couldn't.</summary>
+    public bool Save() => Save(FilePath);
 
-    internal void Save(string path)
+    internal bool Save(string path)
     {
         try
         {
@@ -159,10 +189,18 @@ public sealed class AppSettings
             string tmp = path + ".tmp";
             File.WriteAllText(tmp, JsonSerializer.Serialize(this, JsonOptions));
             File.Move(tmp, path, overwrite: true);
+            LastSaveError = null;
+            return true;
         }
-        catch
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or JsonException)
         {
-            // Not fatal
+            // Not fatal, but not silent either: the caller tells the user, and the log keeps the details
+            if (LastSaveError != ex.Message) Log.Error($"Saving settings to {path}", ex);
+            LastSaveError = ex.Message;
+            return false;
         }
     }
+
+    /// <summary>The same JSON options settings.json uses (overlay export/import shares them).</summary>
+    internal static JsonSerializerOptions Json => JsonOptions;
 }

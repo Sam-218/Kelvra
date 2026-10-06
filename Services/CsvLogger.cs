@@ -58,6 +58,8 @@ public sealed class CsvLogger : IDisposable
         if (_writer == null) return;
         // Time-based, not "every n-th sample": with a refresh slower than 1 s the rows still come at the chosen interval
         var now = Clock();
+        // Clock went back (end of summer time, manual change): restart the schedule instead of waiting an hour
+        if (_nextRow != default && _nextRow - now > _interval + Slack) _nextRow = default;
         if (_nextRow != default && now + Slack < _nextRow) return;
         _nextRow = (_nextRow == default ? now : _nextRow) + _interval;
         if (_nextRow <= now) _nextRow = now + _interval; // fell behind (PC slept, long pause): restart the schedule

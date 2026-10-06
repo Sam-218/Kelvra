@@ -21,7 +21,7 @@
                             <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                             <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Muted}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
                         </StackPanel>
-                        <TextBlock Grid.Column="1" Text="{Binding Sensor.ValueText}" FontSize="16" FontWeight="SemiBold"
+                        <TextBlock Grid.Column="1" Text="{Binding Sensor.ValueText}" FontSize="16" Style="{StaticResource Mono}"
                                    Foreground="{Binding Brush}" VerticalAlignment="Center" Margin="8,0,4,0" />
                         <Button x:Name="Pin" Grid.Column="2" Style="{StaticResource IconButton}" AutomationProperties.Name="Add to your selection" Content="&#xE734;" Width="26" Height="26"
                                 Click="Pin_Click" ToolTip="Add to your selection" VerticalAlignment="Top" />
@@ -54,7 +54,7 @@
                             <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" TextTrimming="CharacterEllipsis" />
                             <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Muted}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
                         </StackPanel>
-                        <TextBlock Grid.Column="1" Text="{Binding Sensor.ValueText}" FontSize="22" FontWeight="SemiBold"
+                        <TextBlock Grid.Column="1" Text="{Binding Sensor.ValueText}" FontSize="22" Style="{StaticResource Mono}"
                                    Foreground="{Binding Brush}" VerticalAlignment="Center" Margin="8,0,6,0" />
                         <Button Grid.Column="2" Style="{StaticResource IconButton}" AutomationProperties.Name="Remove from your selection" Content="&#xE711;" Width="26" Height="26"
                                 Click="Pin_Click" ToolTip="Remove from your selection" VerticalAlignment="Top" />
@@ -71,7 +71,7 @@
         <Grid DockPanel.Dock="Top" Margin="0,0,0,14">
             <StackPanel>
                 <TextBlock Text="History" Style="{StaticResource H1}" />
-                <TextBlock Text="Graphs of the last hour, sampled once per second. Hover a graph for exact values."
+                <TextBlock Text="Up to 24 hours: every second for the last hour, one-minute averages before that. Hover a graph for exact values."
                            Style="{StaticResource Muted}" Margin="0,4,0,0" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
@@ -81,6 +81,10 @@
                         <RadioButton Style="{StaticResource Segment}" Content="5 min" Tag="5" GroupName="Range" Checked="Range_Checked" />
                         <RadioButton Style="{StaticResource Segment}" Content="15 min" Tag="15" GroupName="Range" Checked="Range_Checked" />
                         <RadioButton Style="{StaticResource Segment}" Content="1 hour" Tag="60" GroupName="Range" Checked="Range_Checked" />
+                        <RadioButton Style="{StaticResource Segment}" Content="6 h" Tag="360" GroupName="Range" Checked="Range_Checked"
+                                     ToolTip="One-minute averages" AutomationProperties.Name="6 hours" />
+                        <RadioButton Style="{StaticResource Segment}" Content="24 h" Tag="1440" GroupName="Range" Checked="Range_Checked"
+                                     ToolTip="One-minute averages" AutomationProperties.Name="24 hours" />
                     </StackPanel>
                 </Border>
                 <Button x:Name="RecordButton" Margin="10,0,0,0" Click="Record_Click" ToolTip="Save the graphs you're viewing to a CSV file" AutomationProperties.Name="Record CSV">
@@ -93,7 +97,7 @@
         </Grid>
 
         <!-- recording status -->
-        <Border x:Name="RecordingBar" DockPanel.Dock="Top" Background="{DynamicResource AccentSoftBrush}" CornerRadius="10"
+        <Border x:Name="RecordingBar" DockPanel.Dock="Top" Background="{DynamicResource AccentSoftBrush}" CornerRadius="6"
                 Padding="14,8" Margin="0,0,0,12" Visibility="Collapsed">
             <Grid>
                 <TextBlock x:Name="RecordingText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,200,0" />

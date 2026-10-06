@@ -176,18 +176,35 @@ public partial class DuplicatesView : UserControl
 
         RecycleButton.IsEnabled = false;
         var removed = new List<DuplicateFile>();
+        int changed = 0;
+        var groups = _groups.Where(g => g.Files.Any(f => f.Selected)).Select(g => (Keep: g.Files.Where(f => !f.Selected).ToList(),
+                                                                                   Drop: g.Files.Where(f => f.Selected).ToList())).ToList();
         await Task.Run(() =>
         {
-            foreach (var f in selected)
+            foreach (var (keep, drop) in groups)
             {
-                try
+                // Files can change after the search: only recycle a copy if it and a kept copy are still as they were compared
+                if (!keep.Any(DuplicateFinder.IsUnchanged))
                 {
-                    FileSystem.DeleteFile(f.Path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
-                    lock (removed) removed.Add(f);
+                    changed += drop.Count;
+                    continue;
                 }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OperationCanceledException)
+                foreach (var f in drop)
                 {
-                    // locked, no access, or user cancelled – keep it in the list
+                    if (!DuplicateFinder.IsUnchanged(f))
+                    {
+                        changed++;
+                        continue;
+                    }
+                    try
+                    {
+                        FileSystem.DeleteFile(f.Path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+                        removed.Add(f);
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OperationCanceledException)
+                    {
+                        // locked, no access, or user cancelled – keep it in the list
+                    }
                 }
             }
         });
@@ -197,8 +214,10 @@ public partial class DuplicatesView : UserControl
         foreach (var g in _groups) g.Files.RemoveAll(gone.Contains);
         _groups.RemoveAll(g => g.Files.Count < 2);
         ShowGroups();
+        int failed = selected.Count - removed.Count - changed;
         Summary.Text = $"Moved {removed.Count:N0} files ({ByteFormat.Format(removed.Sum(f => f.Node.Size))}) to the Recycle Bin." +
-                       (removed.Count < selected.Count ? $" {selected.Count - removed.Count} couldn't be moved (in use?)." : "");
+                       (changed > 0 ? $" {changed} were left alone because they (or the copy you kept) changed since the search – search again." : "") +
+                       (failed > 0 ? $" {failed} couldn't be moved (in use?)." : "");
         FilesRemoved?.Invoke(removed.Select(f => f.Node).ToList());
     }
 

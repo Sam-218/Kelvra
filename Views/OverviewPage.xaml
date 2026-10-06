@@ -1,0 +1,196 @@
+<UserControl x:Class="Kelvra.OverviewPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Kelvra">
+    <UserControl.Resources>
+        <!-- CPU / GPU panel: four stat cells, then temperature (accent) and load (grey) over the selected range -->
+        <DataTemplate x:Key="DeviceTemplate" DataType="{x:Type local:DevicePanel}">
+            <Border Style="{StaticResource Card}" Padding="14,12,14,10" Margin="0,0,12,12">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding Kind}" Style="{StaticResource Overline}" Foreground="{DynamicResource AccentBrush}" />
+                        <TextBlock Text="{Binding Device}" Style="{StaticResource Muted}" Margin="10,0,0,0" TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <Border Background="{DynamicResource LineBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1"
+                            CornerRadius="4" Margin="0,10,0,10" SnapsToDevicePixels="True">
+                        <ItemsControl ItemsSource="{Binding Stats}" Focusable="False">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid Rows="1" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type local:StatCell}">
+                                    <Border Background="{DynamicResource SurfaceBrush}" Margin="{Binding Margin}" Padding="10,7,10,8">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Label}" Style="{StaticResource Overline}" FontSize="10" />
+                                            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                                <TextBlock Text="{Binding Value}" Style="{StaticResource Mono}" FontSize="22" />
+                                                <TextBlock Text="{Binding Unit}" Style="{StaticResource Muted}" Margin="4,0,0,3"
+                                                           VerticalAlignment="Bottom" TextWrapping="NoWrap" />
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding Range}" Style="{StaticResource Mono}" FontSize="11"
+                                                       Foreground="{DynamicResource SubtleBrush}" TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Border>
+                    <local:TrendChart Height="120" PrimaryId="{Binding TempId}" SecondaryId="{Binding LoadId}"
+                                      AutomationProperties.Name="{Binding ChartName}" />
+                    <Grid Margin="0,6,0,0">
+                        <StackPanel Orientation="Horizontal">
+                            <Rectangle Width="12" Height="2" Fill="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+                            <TextBlock Text="Temperature" Style="{StaticResource Muted}" FontSize="11" Margin="6,0,14,0" />
+                            <Rectangle Width="12" Height="2" Fill="{DynamicResource ChartSecondaryBrush}" VerticalAlignment="Center" />
+                            <TextBlock Text="Load" Style="{StaticResource Muted}" FontSize="11" Margin="6,0,0,0" />
+                        </StackPanel>
+                        <TextBlock x:Name="RangeLabel" Style="{StaticResource Mono}" FontSize="11" Foreground="{DynamicResource SubtleBrush}"
+                                   HorizontalAlignment="Right"
+                                   Text="{Binding RangeText, RelativeSource={RelativeSource AncestorType=local:OverviewPage}}" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <DockPanel Margin="24,20,24,16">
+        <!-- header -->
+        <Grid DockPanel.Dock="Top" Margin="0,0,0,16">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="Overview" Style="{StaticResource H1}" />
+                <Ellipse x:Name="LiveDot" Width="7" Height="7" Fill="{DynamicResource GoodBrush}" Margin="16,3,6,0" VerticalAlignment="Center" />
+                <TextBlock x:Name="LiveText" Text="LIVE" Style="{StaticResource Overline}" FontFamily="{StaticResource MonoFont}"
+                           VerticalAlignment="Center" Margin="0,3,0,0" />
+            </StackPanel>
+            <Border Style="{StaticResource SegmentHost}" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <StackPanel x:Name="RangeButtons" Orientation="Horizontal" AutomationProperties.Name="Graph range">
+                    <RadioButton Style="{StaticResource Segment}" Content="1m" Tag="1" GroupName="OverviewRange" Checked="Range_Checked"
+                                 AutomationProperties.Name="1 minute" FontFamily="{StaticResource MonoFont}" FontSize="12" />
+                    <RadioButton Style="{StaticResource Segment}" Content="5m" Tag="5" GroupName="OverviewRange" Checked="Range_Checked"
+                                 AutomationProperties.Name="5 minutes" FontFamily="{StaticResource MonoFont}" FontSize="12" />
+                    <RadioButton Style="{StaticResource Segment}" Content="15m" Tag="15" GroupName="OverviewRange" Checked="Range_Checked"
+                                 AutomationProperties.Name="15 minutes" FontFamily="{StaticResource MonoFont}" FontSize="12" />
+                    <RadioButton Style="{StaticResource Segment}" Content="1h" Tag="60" GroupName="OverviewRange" Checked="Range_Checked"
+                                 AutomationProperties.Name="1 hour" FontFamily="{StaticResource MonoFont}" FontSize="12" />
+                    <RadioButton Style="{StaticResource Segment}" Content="6h" Tag="360" GroupName="OverviewRange" Checked="Range_Checked"
+                                 AutomationProperties.Name="6 hours" FontFamily="{StaticResource MonoFont}" FontSize="12" />
+                    <RadioButton Style="{StaticResource Segment}" Content="24h" Tag="1440" GroupName="OverviewRange" Checked="Range_Checked"
+                                 AutomationProperties.Name="24 hours" FontFamily="{StaticResource MonoFont}" FontSize="12" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto" Focusable="False">
+            <StackPanel Margin="0,0,-12,0">
+                <TextBlock x:Name="LoadingText" Text="Detecting hardware…" Style="{StaticResource Muted}" Margin="0,0,0,12" />
+
+                <ItemsControl x:Name="DevicePanels" ItemTemplate="{StaticResource DeviceTemplate}" Focusable="False">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Columns="{Binding DeviceColumns, RelativeSource={RelativeSource AncestorType=local:OverviewPage}}" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+
+                <Grid Margin="0,0,12,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="260" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- pinned sensors -->
+                    <Border Style="{StaticResource Card}" Padding="0" Margin="0" VerticalAlignment="Top">
+                        <StackPanel>
+                            <Grid Margin="16,10,8,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="86" />
+                                    <ColumnDefinition Width="76" />
+                                    <ColumnDefinition Width="76" />
+                                    <ColumnDefinition Width="110" />
+                                    <ColumnDefinition Width="76" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="PINNED SENSORS" Style="{StaticResource Overline}" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1" Text="NOW" Style="{StaticResource Overline}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="2" Text="MIN" Style="{StaticResource Overline}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="3" Text="MAX" Style="{StaticResource Overline}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                <TextBlock x:Name="TrendHeader" Grid.Column="4" Text="TREND" Style="{StaticResource Overline}" Margin="16,0,0,0" VerticalAlignment="Center" />
+                                <Button Grid.Column="5" Style="{StaticResource GhostButton}" Padding="8,4" Click="Choose_Click" HorizontalAlignment="Right"
+                                        ToolTip="Choose which sensors are pinned here (shared with History → Selected)">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE710;" Style="{StaticResource Icon}" FontSize="11" Margin="0,0,6,0" />
+                                        <TextBlock Text="Choose" FontSize="12" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+                            <ItemsControl x:Name="PinnedList" Focusable="False">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type local:SensorVm}">
+                                        <Border BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0" Padding="16,6,8,6">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="86" />
+                                                    <ColumnDefinition Width="76" />
+                                                    <ColumnDefinition Width="76" />
+                                                    <ColumnDefinition Width="110" />
+                                                    <ColumnDefinition Width="76" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock TextTrimming="CharacterEllipsis" VerticalAlignment="Center">
+                                                    <Run Text="{Binding Name, Mode=OneWay}" />
+                                                    <Run Text="{Binding GroupName, Mode=OneWay}" Foreground="{DynamicResource SubtleBrush}" />
+                                                </TextBlock>
+                                                <TextBlock x:Name="Now" Grid.Column="1" Text="{Binding ValueText}" Style="{StaticResource Mono}"
+                                                           HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="2" Text="{Binding MinText}" Style="{StaticResource Mono}" Foreground="{DynamicResource MutedBrush}"
+                                                           HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="3" Text="{Binding MaxText}" Style="{StaticResource Mono}" Foreground="{DynamicResource MutedBrush}"
+                                                           HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                                <local:TrendChart Grid.Column="4" Height="20" Margin="16,0,0,0" PrimaryId="{Binding Id}"
+                                                                  AutoScale="True" ShowGrid="False" />
+                                            </Grid>
+                                        </Border>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding Level}" Value="1">
+                                                <Setter TargetName="Now" Property="Foreground" Value="{DynamicResource WarnBrush}" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Level}" Value="2">
+                                                <Setter TargetName="Now" Property="Foreground" Value="{DynamicResource HotBrush}" />
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock x:Name="PinnedEmpty" Style="{StaticResource Muted}" Margin="16,8,16,14" Visibility="Collapsed"
+                                       Text="Nothing pinned yet. Click “Choose”, or the ☆ on any graph on the History page." />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- memory / drive / network -->
+                    <Border Grid.Column="2" Style="{StaticResource Card}" Margin="0" Padding="14,12" VerticalAlignment="Top">
+                        <ItemsControl x:Name="SideList" Focusable="False">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type local:SideStat}">
+                                    <StackPanel Margin="0,0,0,14">
+                                        <Grid>
+                                            <TextBlock Text="{Binding Label}" Style="{StaticResource Overline}" VerticalAlignment="Bottom" />
+                                            <TextBlock Text="{Binding Value}" Style="{StaticResource Mono}" FontSize="15" HorizontalAlignment="Right" />
+                                        </Grid>
+                                        <ProgressBar Style="{StaticResource Meter}" Value="{Binding Percent, Mode=OneWay}" Margin="0,6,0,5"
+                                                     AutomationProperties.Name="{Binding Label}" />
+                                        <TextBlock Text="{Binding Detail}" Style="{StaticResource Muted}" FontSize="11"
+                                                   Foreground="{DynamicResource SubtleBrush}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Border>
+                </Grid>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

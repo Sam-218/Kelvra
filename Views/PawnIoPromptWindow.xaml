@@ -8,7 +8,7 @@
         TextOptions.TextFormattingMode="Display" UseLayoutRounding="True">
     <StackPanel Margin="26,24,26,22">
         <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-            <Border Width="40" Height="40" CornerRadius="10" Background="{DynamicResource AccentSoftBrush}">
+            <Border Width="40" Height="40" CornerRadius="6" Background="{DynamicResource AccentSoftBrush}">
                 <TextBlock Text="&#xE9D9;" Style="{StaticResource Icon}" FontSize="20" HorizontalAlignment="Center"
                            Foreground="{DynamicResource AccentBrush}" />
             </Border>
@@ -20,7 +20,7 @@
                    Text="Kelvra uses the free PawnIO driver to read CPU temperatures, voltages and fan speeds. Without it, those sensors show 0." />
 
         <Border Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1"
-                CornerRadius="10" Padding="14,10" Margin="0,16,0,0">
+                CornerRadius="6" Padding="14,10" Margin="0,16,0,0">
             <TextBlock Style="{StaticResource Muted}" FontSize="12" LineHeight="18">
                 <Run Text="• Official, digitally signed installer from pawnio.eu (namazso)" /><LineBreak />
                 <Run Text="• Takes a few seconds; Windows may ask for permission" /><LineBreak />

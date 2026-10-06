@@ -19,8 +19,9 @@ public sealed class TreemapControl : FrameworkElement
 
     private readonly List<(Rect Rect, DiskNode Node)> _hits = new();
     private readonly Dictionary<DiskNode, Rect> _rects = new(ReferenceEqualityComparer.Instance);
-    private readonly DrawingVisual _map = new();     // redrawn only when data/size/highlight change
+    private readonly MapLayer _layer = new();        // the map, kept as a cached bitmap (see MapLayer)
     private readonly DrawingVisual _overlay = new(); // hover + selection outlines, cheap to redraw
+    private DrawingVisual Map => _layer.Drawing;
     private readonly Dictionary<Color, Brush> _cushions = new();
     private readonly Dictionary<Color, Brush> _dimmed = new();
     private static readonly Pen Outline = Freeze(new Pen(new SolidColorBrush(Color.FromArgb(90, 0, 0, 0)), 0.6));
@@ -53,12 +54,52 @@ public sealed class TreemapControl : FrameworkElement
         ClipToBounds = true;
         Focusable = false;
         Cursor = Cursors.Hand;
-        AddVisualChild(_map);
+        AddVisualChild(_layer);
         AddVisualChild(_overlay);
     }
 
     protected override int VisualChildrenCount => 2;
-    protected override Visual GetVisualChild(int index) => index == 0 ? _map : _overlay;
+    protected override Visual GetVisualChild(int index) => index == 0 ? _layer : _overlay;
+
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        _layer.Measure(availableSize);
+        return base.MeasureOverride(availableSize);
+    }
+
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        _layer.Arrange(new Rect(finalSize));
+        return finalSize;
+    }
+
+    /// <summary>
+    /// Holds the map drawing with a <see cref="BitmapCache"/>. A big drive draws 100,000+ blocks, and without the cache
+    /// WPF replays all of them (about half a second at full-screen size) every time the hover outline moves — that was the
+    /// laggy, block-skipping hover. Cached, a hover change only redraws the outline; the map is re-rasterized only when
+    /// it actually changes (scan, zoom, highlight, resize). Not hit-testable: the treemap control handles the mouse.
+    /// </summary>
+    private sealed class MapLayer : FrameworkElement
+    {
+        public MapLayer()
+        {
+            IsHitTestVisible = false;
+            AddVisualChild(Drawing);
+            CacheMode = new BitmapCache { SnapsToDevicePixels = true };
+        }
+
+        public DrawingVisual Drawing { get; } = new();
+
+        /// <summary>Renders the cache at the screen's real pixel density, so labels stay sharp at 125–200 % scaling.</summary>
+        public void MatchDpi(double scale)
+        {
+            if (CacheMode is BitmapCache cache && Math.Abs(cache.RenderAtScale - scale) > 0.01)
+                CacheMode = new BitmapCache { SnapsToDevicePixels = true, RenderAtScale = scale };
+        }
+
+        protected override int VisualChildrenCount => 1;
+        protected override Visual GetVisualChild(int index) => Drawing;
+    }
 
     public DiskNode? Root
     {
@@ -122,15 +163,23 @@ public sealed class TreemapControl : FrameworkElement
         RenderMap();
     }
 
+    /// <summary>Moved to a monitor with other scaling: redraw so the cached map is sharp there.</summary>
+    protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
+    {
+        base.OnDpiChanged(oldDpi, newDpi);
+        RenderMap();
+    }
+
     private void RenderMap()
     {
         _hits.Clear();
         _rects.Clear();
-        using (var dc = _map.RenderOpen())
+        _pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        _layer.MatchDpi(_pixelsPerDip);
+        using (var dc = Map.RenderOpen())
         {
             var bounds = new Rect(RenderSize);
             dc.DrawRectangle(FolderFill, null, bounds);
-            _pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
             if (ViewRoot is { Size: > 0 } view) Draw(dc, view, bounds, 0);
         }
         RenderOverlay();

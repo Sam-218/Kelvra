@@ -17,7 +17,8 @@ public sealed class AlertService
     /// <summary>Called after every poll: refreshes each rule's live status and fires the ones whose condition has held long enough.</summary>
     public void Evaluate(AppSettings settings, SensorStore store)
     {
-        var now = DateTime.Now;
+        // UTC: a summer/winter time change mustn't delay alerts or reset their cooldown
+        var now = DateTime.UtcNow;
         foreach (var rule in settings.Alerts)
         {
             if (!store.ById.TryGetValue(rule.SensorId, out var sensor))
@@ -48,8 +49,8 @@ public sealed class AlertService
             if (_lastFired.TryGetValue(rule.Id, out var last) && (now - last).TotalMinutes < Math.Max(rule.CooldownMinutes, 0.1)) continue;
 
             _lastFired[rule.Id] = now;
-            rule.LastFiredText = $"Last triggered {now:HH:mm:ss}";
-            Fire(rule, sensor, now);
+            rule.LastFiredText = $"Last triggered {now.ToLocalTime():HH:mm:ss}";
+            Fire(rule, sensor, now.ToLocalTime());
         }
     }
 

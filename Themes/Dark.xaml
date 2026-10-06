@@ -1,25 +1,29 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <SolidColorBrush x:Key="WindowBrush" Color="#0E1015" />
-    <SolidColorBrush x:Key="SidebarBrush" Color="#12151B" />
-    <SolidColorBrush x:Key="SurfaceBrush" Color="#171A21" />
-    <SolidColorBrush x:Key="SurfaceAltBrush" Color="#1F232C" />
-    <SolidColorBrush x:Key="InputBrush" Color="#12151B" />
-    <SolidColorBrush x:Key="LineBrush" Color="#282D38" />
-    <SolidColorBrush x:Key="TextBrush" Color="#E8EAF0" />
-    <SolidColorBrush x:Key="MutedBrush" Color="#8B92A1" />
-    <SolidColorBrush x:Key="AccentBrush" Color="#3B82F6" />
-    <SolidColorBrush x:Key="AccentSoftBrush" Color="#263B82F6" />
-    <!-- Fill behind white text (buttons, checked chips): darker than AccentBrush so white text reaches 4.5:1 -->
-    <SolidColorBrush x:Key="AccentFillBrush" Color="#2563EB" />
-    <SolidColorBrush x:Key="AccentTextBrush" Color="#FFFFFF" />
-    <SolidColorBrush x:Key="HoverBrush" Color="#12FFFFFF" />
-    <SolidColorBrush x:Key="PressedBrush" Color="#20FFFFFF" />
-    <SolidColorBrush x:Key="ScrollThumbBrush" Color="#3A404D" />
-    <SolidColorBrush x:Key="SwitchOffBrush" Color="#2A2F3A" />
-    <SolidColorBrush x:Key="GoodBrush" Color="#34D399" />
-    <SolidColorBrush x:Key="WarnBrush" Color="#FBBF24" />
-    <SolidColorBrush x:Key="HotBrush" Color="#F87171" />
-    <SolidColorBrush x:Key="DangerBrush" Color="#F87171" />
-    <SolidColorBrush x:Key="WarnSoftBrush" Color="#26FBBF24" />
+    <!-- "Instrument panel" (dark): graphite ground, hairline panels, one amber signal colour for live data.
+         Contrast on SurfaceBrush: Text 14.9:1 · Muted 6.9:1 · Subtle 5.8:1 · Accent 8.9:1 · Hot 6.5:1 -->
+    <SolidColorBrush x:Key="WindowBrush" Color="#0C0E11" />
+    <SolidColorBrush x:Key="SidebarBrush" Color="#0C0E11" />
+    <SolidColorBrush x:Key="SurfaceBrush" Color="#13161B" />
+    <SolidColorBrush x:Key="SurfaceAltBrush" Color="#1A1E25" />
+    <SolidColorBrush x:Key="InputBrush" Color="#0F1216" />
+    <SolidColorBrush x:Key="LineBrush" Color="#22262E" />
+    <SolidColorBrush x:Key="TextBrush" Color="#E7E9EC" />
+    <SolidColorBrush x:Key="MutedBrush" Color="#98A1AE" />
+    <SolidColorBrush x:Key="SubtleBrush" Color="#8A93A0" />
+    <SolidColorBrush x:Key="AccentBrush" Color="#F5A524" />
+    <SolidColorBrush x:Key="AccentSoftBrush" Color="#24F5A524" />
+    <!-- Fill behind text (buttons, selected chips): dark text on amber reaches 9.5:1 -->
+    <SolidColorBrush x:Key="AccentFillBrush" Color="#F5A524" />
+    <SolidColorBrush x:Key="AccentTextBrush" Color="#0C0E11" />
+    <SolidColorBrush x:Key="HoverBrush" Color="#0FFFFFFF" />
+    <SolidColorBrush x:Key="PressedBrush" Color="#1CFFFFFF" />
+    <SolidColorBrush x:Key="ScrollThumbBrush" Color="#323844" />
+    <SolidColorBrush x:Key="SwitchOffBrush" Color="#262A33" />
+    <SolidColorBrush x:Key="ChartSecondaryBrush" Color="#5B6472" />
+    <SolidColorBrush x:Key="GoodBrush" Color="#3DD68C" />
+    <SolidColorBrush x:Key="WarnBrush" Color="#FFD166" />
+    <SolidColorBrush x:Key="HotBrush" Color="#FF6B5E" />
+    <SolidColorBrush x:Key="DangerBrush" Color="#FF6B5E" />
+    <SolidColorBrush x:Key="WarnSoftBrush" Color="#24FFD166" />
 </ResourceDictionary>

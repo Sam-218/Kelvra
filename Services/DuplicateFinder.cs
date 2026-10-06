@@ -131,6 +131,23 @@ public sealed class DuplicateFinder
         return false;
     }
 
+    /// <summary>
+    /// True if the file still looks exactly like it did when it was compared (same size and last-write time).
+    /// Checked right before recycling, so a copy that was edited after the search isn't thrown away as a "duplicate".
+    /// </summary>
+    public static bool IsUnchanged(DuplicateFile file)
+    {
+        try
+        {
+            var info = new FileInfo(file.Path);
+            return info.Exists && info.Length == file.Node.Size && info.LastWriteTime == file.Modified;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return false;
+        }
+    }
+
     private sealed record Hashed(DiskNode Node, string Hash, string FileId, DateTime Modified);
 
     private List<Hashed> Hash(IEnumerable<DiskNode> files, bool full, CancellationToken ct)

@@ -15,6 +15,9 @@ public sealed record SensorReading(
     float? Min,
     float? Max)
 {
+    /// <summary>A fan/pump output Kelvra can set (Control sensor with a software control).</summary>
+    public bool Controllable { get; init; }
+
     public string ValueText => SensorFormat.Format(Type, Value);
     public string MinText => SensorFormat.Format(Type, Min);
     public string MaxText => SensorFormat.Format(Type, Max);
@@ -52,6 +55,10 @@ public sealed class HardwareService : IDisposable
     private readonly object _lock = new();
     private bool _opened;
 
+    // Fan outputs found by the last poll, and the ones Kelvra currently drives (so they can be handed back to the BIOS)
+    private readonly Dictionary<string, IControl> _controls = new();
+    private readonly HashSet<string> _driven = new();
+
     public void Open()
     {
         lock (_lock)
@@ -66,6 +73,8 @@ public sealed class HardwareService : IDisposable
     {
         lock (_lock)
         {
+            ReleaseFansLocked();
+            _controls.Clear();
             if (_opened) _computer.Close();
             _computer.Open();
             _opened = true;
@@ -80,36 +89,115 @@ public sealed class HardwareService : IDisposable
         {
             if (!_opened) return list;
             foreach (IHardware hw in _computer.Hardware)
-                Collect(hw, hw, list);
+                Collect(hw, hw, list, _controls);
         }
         return list;
     }
 
+    // ---------- fan control ----------
+
+    /// <summary>
+    /// Sets a fan output to <paramref name="percent"/>, or hands it back to the BIOS/driver (null). Returns false if that
+    /// output doesn't exist or refused. Writes to hardware: only <see cref="FanController"/> calls this.
+    /// </summary>
+    public bool SetFan(string controlId, float? percent)
+    {
+        lock (_lock)
+        {
+            if (!_opened || !_controls.TryGetValue(controlId, out var control)) return false;
+            try
+            {
+                if (percent is float p)
+                {
+                    control.SetSoftware(Math.Clamp(p, control.MinSoftwareValue, control.MaxSoftwareValue));
+                    _driven.Add(controlId);
+                }
+                else
+                {
+                    control.SetDefault();
+                    _driven.Remove(controlId);
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Setting fan {controlId} to {(percent is float v ? v + " %" : "automatic")}", ex);
+                return false;
+            }
+        }
+    }
+
+    /// <summary>Gives every fan Kelvra drives back to the BIOS/driver (on exit, errors, or when fan control is turned off).</summary>
+    public void ReleaseFans()
+    {
+        lock (_lock) ReleaseFansLocked();
+    }
+
+    private void ReleaseFansLocked()
+    {
+        foreach (var id in _driven.ToList())
+        {
+            try
+            {
+                if (_controls.TryGetValue(id, out var control)) control.SetDefault();
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Handing fan {id} back to automatic", ex);
+            }
+        }
+        _driven.Clear();
+    }
+
+    /// <summary>Starts every sensor's min/max over from its current value (like the Reset button in HWiNFO).</summary>
+    public void ResetMinMax()
+    {
+        lock (_lock)
+        {
+            if (!_opened) return;
+            foreach (IHardware hw in _computer.Hardware) ResetMinMax(hw);
+        }
+    }
+
+    private static void ResetMinMax(IHardware hw)
+    {
+        foreach (ISensor s in hw.Sensors)
+        {
+            s.ResetMin();
+            s.ResetMax();
+        }
+        foreach (IHardware sub in hw.SubHardware) ResetMinMax(sub);
+    }
+
     /// <summary>Adds the sensors of <paramref name="hw"/> and its sub-devices, all filed under the top-level device.</summary>
-    private static void Collect(IHardware root, IHardware hw, List<SensorReading> list)
+    private static void Collect(IHardware root, IHardware hw, List<SensorReading> list, Dictionary<string, IControl> controls)
     {
         try { hw.Update(); } catch { /* some devices fail transiently */ }
 
         foreach (ISensor s in hw.Sensors)
         {
+            string id = s.Identifier.ToString();
+            bool controllable = s.SensorType == SensorType.Control && s.Control != null;
+            if (controllable) controls[id] = s.Control!;
             list.Add(new SensorReading(
-                s.Identifier.ToString(),
+                id,
                 root.Identifier.ToString(),
                 root.Name,
                 root.HardwareType,
                 hw == root ? s.Name : $"{hw.Name} {s.Name}",
                 s.SensorType,
-                s.Value, s.Min, s.Max));
+                s.Value, s.Min, s.Max) { Controllable = controllable });
         }
 
         foreach (IHardware sub in hw.SubHardware)
-            Collect(root, sub, list);
+            Collect(root, sub, list, controls);
     }
 
     public void Dispose()
     {
         lock (_lock)
         {
+            ReleaseFansLocked(); // never leave a fan at a fixed speed when Kelvra exits
             if (_opened) _computer.Close();
             _opened = false;
         }

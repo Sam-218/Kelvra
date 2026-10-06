@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Security.Principal;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
+using System.Windows.Automation;
 using System.Windows.Interop;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
@@ -12,8 +12,8 @@ using static Kelvra.NativeMethods;
 namespace Kelvra;
 
 /// <summary>
-/// Sidebar shell that switches between the pages, plus the Overlays editor, the Settings page, the global hotkeys
-/// (Ctrl+Shift+O / Ctrl+Shift+L) and the small toast messages. Each other page lives in its own UserControl.
+/// Icon-rail shell that switches between the pages, plus the Overlays editor, the Settings page, the global hotkeys
+/// (configurable, Settings → Shortcuts) and the small toast messages. Each other page lives in its own UserControl.
 /// </summary>
 public partial class MainWindow : Window
 {
@@ -25,7 +25,6 @@ public partial class MainWindow : Window
 
     private readonly App _app = App.Current;
     private readonly DispatcherTimer _toastTimer = new() { Interval = TimeSpan.FromSeconds(2.4) };
-    private OverlayProfile? _selected;
     private bool _syncingUi;
     private bool _pawnIoMissing;
     private IntPtr _hwnd;
@@ -34,7 +33,8 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
-        SensorsPage.AddToOverlayRequested += AddSensorToOverlay;
+        SensorsPage.AddToOverlayRequested += OverlaysPage.AddSensor;
+        OverlaysPage.Toast += ShowToast;
         SensorsPage.InstallPawnIoRequested += () => InstallPawnIo_Click(this, new RoutedEventArgs());
         CategoriesPage.CategoryChosen += (hardware, type) =>
         {
@@ -42,22 +42,7 @@ public partial class MainWindow : Window
             NavSensors.IsChecked = true;
         };
 
-        OverlayList.ItemsSource = _app.Settings.Overlays;
-        foreach (var name in OverlayTemplates.Names)
-        {
-            var b = new Button
-            {
-                Content = name == "Blank" ? "+ Blank" : name,
-                Margin = new Thickness(0, 0, 6, 6),
-                Padding = new Thickness(10, 5, 10, 5),
-                FontSize = 12,
-                ToolTip = name == "Blank" ? "Start from an empty overlay" : $"Start from the “{name}” template",
-            };
-            b.Click += (_, _) => CreateOverlay(name);
-            TemplateButtons.Children.Add(b);
-        }
-        if (_app.Settings.Overlays.Count > 0) OverlayList.SelectedIndex = 0;
-
+        BuildAccentSwatches();
         LoadSettingsUi();
         UpdateOverlayControls();
         UpdatePawnIoUi();
@@ -66,10 +51,18 @@ public partial class MainWindow : Window
         _app.Overlays.StateChanged += UpdateOverlayControls;
         _toastTimer.Tick += (_, _) => HideToast();
 
+        foreach (var box in new[] { HotkeyOverlaysBox, HotkeyLockBox })
+        {
+            box.HotkeyChanged += Hotkey_Changed;
+            box.RecordingStarted += UnregisterHotkeys; // so the current shortcut can be pressed into the box
+            box.RecordingEnded += RegisterHotkeys;
+        }
+
         SourceInitialized += OnSourceInitialized;
         StateChanged += (_, _) =>
         {
-            if (WindowState == WindowState.Minimized) Hide();
+            // Only when asked to: hiding on every minimise made the taskbar button vanish unexpectedly
+            if (WindowState == WindowState.Minimized && _app.Settings.MinimizeToTray) Hide();
         };
         Closing += OnClosing;
     }
@@ -81,11 +74,72 @@ public partial class MainWindow : Window
         _hwnd = new WindowInteropHelper(this).Handle;
         ThemeManager.ApplyTitleBar(this);
         HwndSource.FromHwnd(_hwnd)?.AddHook(WndProc);
-
-        const uint mods = MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT;
-        RegisterHotKey(_hwnd, HotkeyToggleOverlays, mods, 0x4F); // O
-        RegisterHotKey(_hwnd, HotkeyToggleLock, mods, 0x4C);     // L
+        RegisterHotkeys();
     }
+
+    // ---------- global shortcuts ----------
+
+    private string? _overlaysHotkeyError, _lockHotkeyError;
+
+    /// <summary>(Re)registers both shortcuts from settings. A shortcut another program owns is reported, not silently dropped.</summary>
+    private void RegisterHotkeys()
+    {
+        if (_hwnd == IntPtr.Zero) return;
+        UnregisterHotkeys();
+        _overlaysHotkeyError = Register(HotkeyToggleOverlays, _app.Settings.HotkeyOverlays);
+        _lockHotkeyError = Register(HotkeyToggleLock, _app.Settings.HotkeyLock);
+        UpdateHotkeyUi();
+        UpdateOverlayControls();
+    }
+
+    private string? Register(int id, string text)
+    {
+        if (text.Length == 0) return null;
+        if (Hotkey.Parse(text) is not { } hotkey) return "Not a valid shortcut.";
+        if (RegisterHotKey(_hwnd, id, hotkey.NativeModifiers | MOD_NOREPEAT, hotkey.VirtualKey)) return null;
+        Log.Warn($"Shortcut {text} is taken by another program");
+        return "Another program already uses this shortcut, so it doesn't work for Kelvra. Pick a different one.";
+    }
+
+    private void UnregisterHotkeys()
+    {
+        if (_hwnd == IntPtr.Zero) return;
+        UnregisterHotKey(_hwnd, HotkeyToggleOverlays);
+        UnregisterHotKey(_hwnd, HotkeyToggleLock);
+    }
+
+    private void Hotkey_Changed(HotkeyBox box)
+    {
+        if (box == HotkeyOverlaysBox) _app.Settings.HotkeyOverlays = box.Hotkey;
+        else _app.Settings.HotkeyLock = box.Hotkey;
+        _app.MarkDirty();
+        // RecordingEnded re-registers right after this
+    }
+
+    private void UpdateHotkeyUi()
+    {
+        var s = _app.Settings;
+        HotkeyOverlaysBox.Hotkey = s.HotkeyOverlays;
+        HotkeyLockBox.Hotkey = s.HotkeyLock;
+        ShowNote(HotkeyOverlaysNote, s.HotkeyOverlays, _overlaysHotkeyError);
+        ShowNote(HotkeyLockNote, s.HotkeyLock, _lockHotkeyError);
+
+        void ShowNote(TextBlock note, string text, string? error)
+        {
+            bool same = text.Length > 0 && text == (note == HotkeyOverlaysNote ? s.HotkeyLock : s.HotkeyOverlays);
+            note.Text = error ?? (same ? "Both actions use the same shortcut." : Hotkey.Parse(text)?.Warning() ?? (text.Length == 0 ? "Off" : ""));
+            note.Foreground = (System.Windows.Media.Brush)FindResource(error != null || same ? "HotBrush" : "MutedBrush");
+        }
+    }
+
+    /// <summary>Hotkey problems for the diagnostics text.</summary>
+    public IEnumerable<string> HotkeyNotes()
+    {
+        if (_overlaysHotkeyError != null) yield return $"Hotkey {_app.Settings.HotkeyOverlays}: {_overlaysHotkeyError}";
+        if (_lockHotkeyError != null) yield return $"Hotkey {_app.Settings.HotkeyLock}: {_lockHotkeyError}";
+    }
+
+    private static string KeyHint(string hotkey) => hotkey.Length == 0 ? "" : $" ({hotkey})";
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
@@ -108,8 +162,7 @@ public partial class MainWindow : Window
             Hide();
             return;
         }
-        UnregisterHotKey(_hwnd, HotkeyToggleOverlays);
-        UnregisterHotKey(_hwnd, HotkeyToggleLock);
+        UnregisterHotkeys();
         e.Cancel = true;
         Dispatcher.BeginInvoke(_app.Quit);
     }
@@ -124,7 +177,8 @@ public partial class MainWindow : Window
     /// <summary>All pages exist the whole time and are only shown/hidden, so they keep their state (scans, search text …).</summary>
     private void Nav_Checked(object sender, RoutedEventArgs e)
     {
-        if (SensorsPage == null || CategoriesPage == null || HistoryPage == null || AlertsPage == null || SystemPage == null || AppsPage == null || DiskPage == null || OverlaysPage == null || SettingsPage == null) return; // during InitializeComponent
+        if (SettingsPage == null) return; // during InitializeComponent (it's the last page created)
+        OverviewPage.Visibility = NavOverview.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         SensorsPage.Visibility = NavSensors.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         CategoriesPage.Visibility = NavCategories.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         HistoryPage.Visibility = NavHistory.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
@@ -132,6 +186,7 @@ public partial class MainWindow : Window
         SystemPage.Visibility = NavSystem.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         AppsPage.Visibility = NavApps.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         DiskPage.Visibility = NavDisk.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        FansPage.Visibility = NavFans.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         OverlaysPage.Visibility = NavOverlays.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         SettingsPage.Visibility = NavSettings.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -161,160 +216,24 @@ public partial class MainWindow : Window
         ShowToast("PawnIO installed – CPU sensors are now available");
     }
 
-    /// <summary>"+" on the Sensors page: adds to the overlay selected in the editor (or the first one, or a new one).</summary>
-    private void AddSensorToOverlay(SensorVm sensor)
-    {
-        var target = _selected ?? _app.Settings.Overlays.FirstOrDefault();
-        if (target == null)
-        {
-            target = new OverlayProfile { Name = NextName("Overlay") };
-            _app.Settings.Overlays.Add(target);
-            OverlayList.SelectedItem = target;
-        }
-
-        if (target.ContainsSensor(sensor.Id))
-        {
-            ShowToast($"“{sensor.OverlayLabel}” is already in {target.Name}");
-            return;
-        }
-        AddItem(target, sensor);
-        ShowToast($"Added “{sensor.OverlayLabel}” to {target.Name}");
-    }
-
-    private void AddItem(OverlayProfile target, SensorVm sensor)
-    {
-        var item = new OverlayItem { SensorId = sensor.Id };
-        _app.Overlays.Resolve(item);
-        target.Items.Add(item);
-    }
-
-    // ---------- overlays page ----------
-
-    private void OverlayList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_selected != null) _selected.Changed -= OnSelectedChanged;
-        _selected = OverlayList.SelectedItem as OverlayProfile;
-        if (_selected != null) _selected.Changed += OnSelectedChanged;
-
-        Editor.DataContext = _selected;
-        Editor.Visibility = _selected == null ? Visibility.Collapsed : Visibility.Visible;
-        NoOverlaySelected.Visibility = _selected == null ? Visibility.Visible : Visibility.Collapsed;
-        UpdateNoItems();
-    }
-
-    private void OnSelectedChanged(object? sender, string property)
-    {
-        if (property == nameof(OverlayProfile.Items)) UpdateNoItems();
-    }
-
-    private void UpdateNoItems() =>
-        NoItemsText.Visibility = _selected is { Items.Count: > 0 } ? Visibility.Collapsed : Visibility.Visible;
-
-    private void CreateOverlay(string template)
-    {
-        string name = NextName(template == "Blank" ? "Overlay" : template);
-        var p = OverlayTemplates.Create(template, _app.Sensors.All, name);
-        int n = _app.Settings.Overlays.Count;
-        p.X = 20 + n * 30;
-        p.Y = 20 + n * 30;
-        p.Locked = false; // new overlays start movable so they can be placed
-        _app.Settings.Overlays.Add(p);
-        _app.Overlays.Visible = true;
-        OverlayList.SelectedItem = p;
-        ShowToast($"Created “{name}”. Drag it into place, then lock it (Ctrl+Shift+L)");
-    }
-
-    private string NextName(string baseName)
-    {
-        var names = _app.Settings.Overlays.Select(o => o.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (!names.Contains(baseName)) return baseName;
-        int i = 2;
-        while (names.Contains($"{baseName} {i}")) i++;
-        return $"{baseName} {i}";
-    }
-
-    private void Duplicate_Click(object sender, RoutedEventArgs e)
-    {
-        if (_selected == null) return;
-        var copy = _selected.Clone(NextName(_selected.Name));
-        _app.Settings.Overlays.Add(copy);
-        OverlayList.SelectedItem = copy;
-        ShowToast($"Duplicated as “{copy.Name}”");
-    }
-
-    private void Delete_Click(object sender, RoutedEventArgs e)
-    {
-        if (_selected == null) return;
-        var result = MessageBox.Show(this, $"Delete the overlay “{_selected.Name}”?", "Delete overlay",
-            MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (result != MessageBoxResult.Yes) return;
-
-        int index = OverlayList.SelectedIndex;
-        _app.Settings.Overlays.Remove(_selected);
-        if (_app.Settings.Overlays.Count > 0)
-            OverlayList.SelectedIndex = Math.Min(index, _app.Settings.Overlays.Count - 1);
-    }
-
-    private void AddSensors_Click(object sender, RoutedEventArgs e)
-    {
-        if (_selected == null) return;
-        var extras = OverlayExtras.PickerItems();
-        var picker = new SensorPickerWindow(extras.Concat(_app.Sensors.All), _selected) { Owner = this };
-        if (picker.ShowDialog() != true) return;
-
-        foreach (var id in picker.SelectedIds)
-            if (_app.Sensors.ById.TryGetValue(id, out var s) || (s = extras.Find(x => x.Id == id)) != null) AddItem(_selected, s);
-        if (picker.SelectedIds.Count > 0)
-            ShowToast($"Added {picker.SelectedIds.Count} sensor(s) to {_selected.Name}");
-    }
-
-    private void PlaceBox_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.Enter) AddPlace_Click(sender, e);
-    }
-
-    private void AddPlace_Click(object sender, RoutedEventArgs e)
-    {
-        if (_selected == null || PlaceBox.Text.Trim().Length == 0) return;
-        if (TimeZonePlaces.Find(PlaceBox.Text) is not var (zoneId, label))
-        {
-            ShowToast($"Couldn't find “{PlaceBox.Text.Trim()}”. Try its country or a big city nearby.");
-            return;
-        }
-        var item = new OverlayItem { SensorId = OverlayExtras.ZoneId(zoneId), Label = label };
-        _app.Overlays.Resolve(item);
-        _selected.Items.Add(item);
-        PlaceBox.Clear();
-        string zone = TimeZoneInfo.FindSystemTimeZoneById(zoneId).DisplayName;
-        ShowToast($"Added a clock for {label} · {zone}");
-    }
-
-    private void MoveUp_Click(object sender, RoutedEventArgs e) => MoveItem(sender, -1);
-    private void MoveDown_Click(object sender, RoutedEventArgs e) => MoveItem(sender, +1);
-
-    private void MoveItem(object sender, int delta)
-    {
-        if (_selected == null || (sender as FrameworkElement)?.DataContext is not OverlayItem item) return;
-        int from = _selected.Items.IndexOf(item);
-        int to = from + delta;
-        if (from < 0 || to < 0 || to >= _selected.Items.Count) return;
-        _selected.Items.Move(from, to);
-    }
-
-    private void RemoveItem_Click(object sender, RoutedEventArgs e)
-    {
-        if (_selected == null || (sender as FrameworkElement)?.DataContext is not OverlayItem item) return;
-        _selected.Items.Remove(item);
-    }
-
     // ---------- sidebar overlay controls ----------
 
     private void UpdateOverlayControls()
     {
         _syncingUi = true;
-        OverlaysSwitch.IsChecked = _app.Overlays.Visible;
+        bool visible = _app.Overlays.Visible;
+        OverlaysSwitch.IsChecked = visible;
         _syncingUi = false;
-        LockAllButton.Content = _app.Overlays.AnyUnlocked ? "Lock overlays" : "Unlock to move";
+        OverlaysSwitch.Content = visible ? "" : ""; // eye / crossed-out eye
+        string overlaysTip = (visible ? "Overlays are shown · click to hide" : "Overlays are hidden · click to show") + KeyHint(_app.Settings.HotkeyOverlays);
+        OverlaysSwitch.ToolTip = overlaysTip;
+        AutomationProperties.SetName(OverlaysSwitch, "Show overlays");
+
+        bool unlocked = _app.Overlays.AnyUnlocked;
+        LockAllButton.Content = unlocked ? "" : ""; // open / closed padlock
+        string lockTip = (unlocked ? "Overlays can be moved · click to lock them" : "Overlays are locked · click to unlock and move them") + KeyHint(_app.Settings.HotkeyLock);
+        LockAllButton.ToolTip = lockTip;
+        AutomationProperties.SetName(LockAllButton, unlocked ? "Lock overlays" : "Unlock overlays to move them");
     }
 
     private void OverlaysSwitch_Changed(object sender, RoutedEventArgs e)
@@ -324,6 +243,8 @@ public partial class MainWindow : Window
     }
 
     private void LockAll_Click(object sender, RoutedEventArgs e) => _app.Overlays.ToggleLockAll();
+
+    private void Mini_Click(object sender, RoutedEventArgs e) => _app.ShowMini();
 
     // ---------- settings page ----------
 
@@ -336,6 +257,9 @@ public partial class MainWindow : Window
         RefreshText.Text = $"{s.RefreshMs / 1000.0:0.00} s";
         StartMinimizedSwitch.IsChecked = s.StartMinimized;
         CloseToTraySwitch.IsChecked = s.CloseToTray;
+        MinimizeToTraySwitch.IsChecked = s.MinimizeToTray;
+        KeepHistorySwitch.IsChecked = s.KeepHistory;
+        UpdateHotkeyUi();
         StartWithWindowsSwitch.IsChecked = s.StartWithWindows;
         (s.Fahrenheit ? UnitFahrenheit : UnitCelsius).IsChecked = true;
         foreach (RadioButton r in LogIntervalButtons.Children)
@@ -345,6 +269,31 @@ public partial class MainWindow : Window
             $"Running as administrator: {(IsAdmin ? "yes" : "no")}\n" +
             $"Settings: {AppSettings.Dir}";
         _syncingUi = false;
+    }
+
+    /// <summary>One round swatch per accent colour (Settings → Appearance).</summary>
+    private void BuildAccentSwatches()
+    {
+        foreach (var accent in Accents.All)
+        {
+            var swatch = new RadioButton
+            {
+                Style = (Style)FindResource("Swatch"),
+                GroupName = "Accent",
+                Background = Accents.Frozen(accent.Bright),
+                ToolTip = accent.Name,
+                IsChecked = string.Equals(_app.Settings.Accent, accent.Name, StringComparison.OrdinalIgnoreCase),
+            };
+            AutomationProperties.SetName(swatch, accent.Name);
+            swatch.Checked += (_, _) =>
+            {
+                if (_app.Settings.Accent == accent.Name) return;
+                _app.Settings.Accent = accent.Name;
+                ThemeManager.ApplyAccent(accent.Name);
+                _app.MarkDirty();
+            };
+            AccentSwatches.Children.Add(swatch);
+        }
     }
 
     private void Theme_Checked(object sender, RoutedEventArgs e)
@@ -368,7 +317,30 @@ public partial class MainWindow : Window
         if (_syncingUi) return;
         _app.Settings.StartMinimized = StartMinimizedSwitch.IsChecked == true;
         _app.Settings.CloseToTray = CloseToTraySwitch.IsChecked == true;
+        _app.Settings.MinimizeToTray = MinimizeToTraySwitch.IsChecked == true;
         _app.MarkDirty();
+    }
+
+    private void KeepHistory_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_syncingUi) return;
+        _app.Settings.KeepHistory = KeepHistorySwitch.IsChecked == true;
+        _app.ApplyKeepHistory();
+        _app.MarkDirty();
+        ShowToast(_app.Settings.KeepHistory ? "History is now saved and kept for 24 hours" : "Saved history deleted");
+    }
+
+    private void CopyDiagnostics_Click(object sender, RoutedEventArgs e)
+    {
+        var notes = HotkeyNotes().Append($"Saving settings: {_app.Settings.LastSaveError ?? "OK"}");
+        Clipboard.SetText(Diagnostics.Build(_app.Settings, _app.Sensors, notes));
+        ShowToast("Diagnostics copied – paste them into your bug report");
+    }
+
+    private void OpenLogFolder_Click(object sender, RoutedEventArgs e)
+    {
+        Directory.CreateDirectory(Log.Folder);
+        Process.Start(new ProcessStartInfo("explorer.exe", $"\"{Log.Folder}\"") { UseShellExecute = true });
     }
 
     private void Unit_Checked(object sender, RoutedEventArgs e)

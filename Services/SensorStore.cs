@@ -21,17 +21,62 @@ public sealed class SensorStore : IDisposable
     public event Action? FirstLoad;
     public event Action? Updated;
 
+    private readonly Func<string, float?, bool> _setFan;
+    private readonly Dictionary<string, float?> _fanRequests = new();
+    private bool _fanWorkerRunning;
+
     public SensorStore()
     {
         _open = _hardware.Open;
         _poll = _hardware.Poll;
+        _setFan = _hardware.SetFan;
     }
 
     /// <summary>For tests: reads from <paramref name="poll"/> instead of the real hardware.</summary>
-    internal SensorStore(Func<List<SensorReading>> poll)
+    internal SensorStore(Func<List<SensorReading>> poll, Func<string, float?, bool>? setFan = null)
     {
         _open = () => { };
         _poll = poll;
+        _setFan = setFan ?? ((_, _) => false);
+    }
+
+    /// <summary>
+    /// Asks for a fan output to be set (percent) or handed back to automatic (null). Applied on a worker thread
+    /// (the hardware lock may be held by a poll); only the newest request per fan counts.
+    /// </summary>
+    public void RequestFan(string controlId, float? percent)
+    {
+        lock (_fanRequests)
+        {
+            _fanRequests[controlId] = percent;
+            if (_fanWorkerRunning) return;
+            _fanWorkerRunning = true;
+        }
+        Task.Run(() =>
+        {
+            while (true)
+            {
+                KeyValuePair<string, float?>[] batch;
+                lock (_fanRequests)
+                {
+                    if (_fanRequests.Count == 0)
+                    {
+                        _fanWorkerRunning = false;
+                        return;
+                    }
+                    batch = _fanRequests.ToArray();
+                    _fanRequests.Clear();
+                }
+                foreach (var (id, percent) in batch) _setFan(id, percent);
+            }
+        });
+    }
+
+    /// <summary>Hands every fan back to the BIOS right now (exit, crash, errors).</summary>
+    public void ReleaseFans()
+    {
+        lock (_fanRequests) _fanRequests.Clear();
+        _hardware.ReleaseFans();
     }
 
     /// <summary>Longest wait between retries while polling keeps failing.</summary>
@@ -75,6 +120,7 @@ public sealed class SensorStore : IDisposable
             catch (Exception ex)
             {
                 // A driver hiccup or an unplugged device mustn't freeze every reading, overlay and alert until restart
+                if (Error != ex.Message) Log.Error("Sensor polling", ex); // once per new error, not every retry
                 Error = ex.Message;
                 failures++;
                 try { Updated?.Invoke(); } catch { /* the banner will update on the next good poll */ }
@@ -98,6 +144,9 @@ public sealed class SensorStore : IDisposable
 
     /// <summary>Reconnects to the hardware so newly available sensors (e.g. CPU temps after PawnIO) show up.</summary>
     public Task ReopenAsync() => Task.Run(_hardware.Reopen);
+
+    /// <summary>Resets every sensor's min/max; the new values show after the next poll.</summary>
+    public Task ResetMinMaxAsync() => Task.Run(_hardware.ResetMinMax);
 
     /// <summary>Updates known sensors in place (bindings just see property changes) and appends newly found ones.</summary>
     private void Apply(List<SensorReading> readings)

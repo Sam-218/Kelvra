@@ -29,6 +29,8 @@ public partial class AppsPage : UserControl
         _processView = new ListCollectionView(_monitor.Rows) { Filter = MatchesProcess };
         ProcessList.ItemsSource = _processView;
         ApplySort();
+        StartupItem.ChangeFailed += (item, error) =>
+            MessageBox.Show(Window.GetWindow(this), $"Couldn't change “{item.Name}”:\n{error}", "Kelvra", MessageBoxButton.OK, MessageBoxImage.Warning);
 
         _timer.Tick += async (_, _) => await RefreshProcessesAsync();
         IsVisibleChanged += async (_, _) =>
