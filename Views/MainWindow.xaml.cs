@@ -19,6 +19,8 @@ public partial class MainWindow : Window
 {
     private const int HotkeyToggleOverlays = 1;
     private const int HotkeyToggleLock = 2;
+    private const int HotkeyToggleGameOverlays = 3;
+    private const int HotkeyBenchmark = 4;
 
     private static readonly bool IsAdmin =
         new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
@@ -32,6 +34,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        BuildShortcuts();
 
         SensorsPage.AddToOverlayRequested += OverlaysPage.AddSensor;
         OverlaysPage.Toast += ShowToast;
@@ -47,11 +50,14 @@ public partial class MainWindow : Window
         UpdateOverlayControls();
         UpdatePawnIoUi();
         Activated += (_, _) => UpdatePawnIoUi(); // picks up the startup prompt's result or an install done elsewhere
+        Activated += (_, _) => UpdateGamingUi();
+        _app.Game.Changed += UpdateGamingUi;
+        UpdateGamingUi();
 
         _app.Overlays.StateChanged += UpdateOverlayControls;
         _toastTimer.Tick += (_, _) => HideToast();
 
-        foreach (var box in new[] { HotkeyOverlaysBox, HotkeyLockBox })
+        foreach (var box in _shortcuts.Select(s => s.Box))
         {
             box.HotkeyChanged += Hotkey_Changed;
             box.RecordingStarted += UnregisterHotkeys; // so the current shortcut can be pressed into the box
@@ -79,15 +85,26 @@ public partial class MainWindow : Window
 
     // ---------- global shortcuts ----------
 
-    private string? _overlaysHotkeyError, _lockHotkeyError;
+    /// <summary>One configurable global shortcut: its id, editor box and note, and where it's stored in settings.</summary>
+    private sealed record Shortcut(int Id, HotkeyBox Box, TextBlock Note, Func<AppSettings, string> Get, Action<AppSettings, string> Set);
 
-    /// <summary>(Re)registers both shortcuts from settings. A shortcut another program owns is reported, not silently dropped.</summary>
+    private Shortcut[] _shortcuts = Array.Empty<Shortcut>();
+    private readonly Dictionary<int, string?> _hotkeyErrors = new();
+
+    private void BuildShortcuts() => _shortcuts = new[]
+    {
+        new Shortcut(HotkeyToggleOverlays, HotkeyOverlaysBox, HotkeyOverlaysNote, s => s.HotkeyOverlays, (s, v) => s.HotkeyOverlays = v),
+        new Shortcut(HotkeyToggleLock, HotkeyLockBox, HotkeyLockNote, s => s.HotkeyLock, (s, v) => s.HotkeyLock = v),
+        new Shortcut(HotkeyToggleGameOverlays, HotkeyGameOverlaysBox, HotkeyGameOverlaysNote, s => s.HotkeyGameOverlays, (s, v) => s.HotkeyGameOverlays = v),
+        new Shortcut(HotkeyBenchmark, HotkeyBenchmarkBox, HotkeyBenchmarkNote, s => s.HotkeyBenchmark, (s, v) => s.HotkeyBenchmark = v),
+    };
+
+    /// <summary>(Re)registers every shortcut from settings. A shortcut another program owns is reported, not silently dropped.</summary>
     private void RegisterHotkeys()
     {
         if (_hwnd == IntPtr.Zero) return;
         UnregisterHotkeys();
-        _overlaysHotkeyError = Register(HotkeyToggleOverlays, _app.Settings.HotkeyOverlays);
-        _lockHotkeyError = Register(HotkeyToggleLock, _app.Settings.HotkeyLock);
+        foreach (var s in _shortcuts) _hotkeyErrors[s.Id] = Register(s.Id, s.Get(_app.Settings));
         UpdateHotkeyUi();
         UpdateOverlayControls();
     }
@@ -104,39 +121,36 @@ public partial class MainWindow : Window
     private void UnregisterHotkeys()
     {
         if (_hwnd == IntPtr.Zero) return;
-        UnregisterHotKey(_hwnd, HotkeyToggleOverlays);
-        UnregisterHotKey(_hwnd, HotkeyToggleLock);
+        foreach (var s in _shortcuts) UnregisterHotKey(_hwnd, s.Id);
     }
 
     private void Hotkey_Changed(HotkeyBox box)
     {
-        if (box == HotkeyOverlaysBox) _app.Settings.HotkeyOverlays = box.Hotkey;
-        else _app.Settings.HotkeyLock = box.Hotkey;
+        if (_shortcuts.FirstOrDefault(s => s.Box == box) is not { } shortcut) return;
+        shortcut.Set(_app.Settings, box.Hotkey);
         _app.MarkDirty();
         // RecordingEnded re-registers right after this
     }
 
     private void UpdateHotkeyUi()
     {
-        var s = _app.Settings;
-        HotkeyOverlaysBox.Hotkey = s.HotkeyOverlays;
-        HotkeyLockBox.Hotkey = s.HotkeyLock;
-        ShowNote(HotkeyOverlaysNote, s.HotkeyOverlays, _overlaysHotkeyError);
-        ShowNote(HotkeyLockNote, s.HotkeyLock, _lockHotkeyError);
-
-        void ShowNote(TextBlock note, string text, string? error)
+        var settings = _app.Settings;
+        foreach (var s in _shortcuts)
         {
-            bool same = text.Length > 0 && text == (note == HotkeyOverlaysNote ? s.HotkeyLock : s.HotkeyOverlays);
-            note.Text = error ?? (same ? "Both actions use the same shortcut." : Hotkey.Parse(text)?.Warning() ?? (text.Length == 0 ? "Off" : ""));
-            note.Foreground = (System.Windows.Media.Brush)FindResource(error != null || same ? "HotBrush" : "MutedBrush");
+            string text = s.Get(settings);
+            string? error = _hotkeyErrors.GetValueOrDefault(s.Id);
+            s.Box.Hotkey = text;
+            bool same = text.Length > 0 && _shortcuts.Any(o => o != s && o.Get(settings) == text);
+            s.Note.Text = error ?? (same ? "Another action uses the same shortcut." : Hotkey.Parse(text)?.Warning() ?? (text.Length == 0 ? "Off" : ""));
+            s.Note.Foreground = (System.Windows.Media.Brush)FindResource(error != null || same ? "HotBrush" : "MutedBrush");
         }
     }
 
     /// <summary>Hotkey problems for the diagnostics text.</summary>
     public IEnumerable<string> HotkeyNotes()
     {
-        if (_overlaysHotkeyError != null) yield return $"Hotkey {_app.Settings.HotkeyOverlays}: {_overlaysHotkeyError}";
-        if (_lockHotkeyError != null) yield return $"Hotkey {_app.Settings.HotkeyLock}: {_lockHotkeyError}";
+        foreach (var s in _shortcuts)
+            if (_hotkeyErrors.GetValueOrDefault(s.Id) is string error) yield return $"Hotkey {s.Get(_app.Settings)}: {error}";
     }
 
     private static string KeyHint(string hotkey) => hotkey.Length == 0 ? "" : $" ({hotkey})";
@@ -148,9 +162,25 @@ public partial class MainWindow : Window
         {
             case HotkeyToggleOverlays: _app.Overlays.Visible = !_app.Overlays.Visible; break;
             case HotkeyToggleLock: _app.Overlays.ToggleLockAll(); break;
+            case HotkeyToggleGameOverlays: ToggleGameOverlays(); break;
+            case HotkeyBenchmark: _app.ToggleBenchmark(); break;
         }
         handled = true;
         return IntPtr.Zero;
+    }
+
+    /// <summary>The gaming overlay shortcut, confirmed on screen (the overlay may be hidden or not have appeared yet).</summary>
+    private void ToggleGameOverlays()
+    {
+        if (!_app.Settings.Overlays.Any(p => p.ShowOnlyInGames))
+        {
+            OsdToast.Notify("No gaming overlay yet", "Create one in Kelvra → Overlays → Gaming.", OsdToast.Red, 5);
+            return;
+        }
+        bool show = !_app.Overlays.GameOverlaysVisible;
+        _app.Overlays.GameOverlaysVisible = show;
+        string detail = !show ? "" : _app.Game.ActiveGame != null ? "" : "It appears as soon as Kelvra detects a game.";
+        OsdToast.Notify(show ? "Gaming overlay on" : "Gaming overlay off", detail, show ? OsdToast.Green : null, 2.5);
     }
 
     private void OnClosing(object? sender, CancelEventArgs e)
@@ -264,6 +294,10 @@ public partial class MainWindow : Window
         (s.Fahrenheit ? UnitFahrenheit : UnitCelsius).IsChecked = true;
         foreach (RadioButton r in LogIntervalButtons.Children)
             r.IsChecked = int.Parse((string)r.Tag) == s.LogIntervalSeconds;
+        CheckUpdatesSwitch.IsChecked = s.CheckForUpdates;
+        GameFpsSwitch.IsChecked = s.GameFpsEnabled;
+        GameAlwaysBox.Text = string.Join(", ", s.GameAlways);
+        GameNeverBox.Text = string.Join(", ", s.GameNever);
         AboutText.Text =
             $"Kelvra {typeof(App).Assembly.GetName().Version?.ToString(3)} · sensors by LibreHardwareMonitor\n" +
             $"Running as administrator: {(IsAdmin ? "yes" : "no")}\n" +
@@ -335,6 +369,68 @@ public partial class MainWindow : Window
         var notes = HotkeyNotes().Append($"Saving settings: {_app.Settings.LastSaveError ?? "OK"}");
         Clipboard.SetText(Diagnostics.Build(_app.Settings, _app.Sensors, notes));
         ShowToast("Diagnostics copied – paste them into your bug report");
+    }
+
+    // ---------- gaming ----------
+
+    private void GameFps_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_syncingUi) return;
+        _app.Settings.GameFpsEnabled = GameFpsSwitch.IsChecked == true;
+        _app.Game.ApplyEnabled();
+        _app.MarkDirty();
+        UpdateGamingUi();
+    }
+
+    private void GameLists_LostFocus(object sender, RoutedEventArgs e)
+    {
+        static List<string> Names(string text) => text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                                                      .Select(GameRules.Normalize).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        _app.Settings.GameAlways = Names(GameAlwaysBox.Text);
+        _app.Settings.GameNever = Names(GameNeverBox.Text);
+        GameAlwaysBox.Text = string.Join(", ", _app.Settings.GameAlways);
+        GameNeverBox.Text = string.Join(", ", _app.Settings.GameNever);
+        _app.MarkDirty();
+    }
+
+    /// <summary>What FPS measuring is doing right now, and the programs it saw drawing frames.</summary>
+    private void UpdateGamingUi()
+    {
+        var game = _app.Game;
+        GameFpsStatus.Text = !_app.Settings.GameFpsEnabled ? "Off."
+            : game.Runner.Error is string error ? "Problem: " + error
+            : game.ActiveGame is { } active ? $"Measuring {active.Name}."
+            : "Waiting for a game.";
+        GameFpsStatus.Foreground = (System.Windows.Media.Brush)FindResource(game.Runner.Error != null && _app.Settings.GameFpsEnabled ? "HotBrush" : "MutedBrush");
+        GameSeenText.Text = game.SeenApps.Count == 0 ? "" : "Seen drawing frames this time: " + string.Join(", ", game.SeenApps);
+    }
+
+    private void CheckUpdates_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_syncingUi) return;
+        _app.Settings.CheckForUpdates = CheckUpdatesSwitch.IsChecked == true;
+        _app.MarkDirty();
+    }
+
+    private async void CheckForUpdates_Click(object sender, RoutedEventArgs e)
+    {
+        CheckUpdatesButton.IsEnabled = false;
+        CheckUpdatesButtonText.Text = "Checking…";
+        try
+        {
+            // An update opens the install prompt; nothing new only needs a toast
+            if (await _app.CheckForUpdatesAsync(manual: true) == null)
+                ShowToast($"You're on the latest version ({Updater.CurrentVersion.ToString(3)})");
+        }
+        catch (Exception ex) when (Updater.IsCheckError(ex))
+        {
+            MessageBox.Show(this, $"Couldn't check for updates.\n{Updater.Describe(ex)}", "Kelvra", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            CheckUpdatesButton.IsEnabled = true;
+            CheckUpdatesButtonText.Text = "Check for updates";
+        }
     }
 
     private void OpenLogFolder_Click(object sender, RoutedEventArgs e)

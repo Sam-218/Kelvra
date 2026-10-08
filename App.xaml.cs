@@ -29,6 +29,8 @@ public partial class App : Application
     public HistoryService History { get; } = new();
     public AlertService Alerts { get; } = new();
     public CsvLogger Logger { get; } = new();
+    /// <summary>Finds the game being played and measures its frames (PresentMon). Feeds the "Game" sensors and game overlays.</summary>
+    public GameMonitor Game { get; private set; } = null!;
     /// <summary>Fan curves (Fans page). Runs after every poll.</summary>
     public FanController Fans { get; } = new();
     private readonly System.Diagnostics.Stopwatch _fanClock = System.Diagnostics.Stopwatch.StartNew();
@@ -44,7 +46,9 @@ public partial class App : Application
         base.OnStartup(e);
 
         // --- Single instance ---
+        bool afterUpdate = e.Args.Contains(Updater.AfterUpdateArg);
         _mutex = new Mutex(true, "Kelvra.SingleInstance", out bool isFirst);
+        if (!isFirst && afterUpdate) isFirst = WaitForPreviousInstance(_mutex);
         if (!isFirst)
         {
             MessageBox.Show("Kelvra is already running (check the system tray).", "Kelvra",
@@ -66,7 +70,20 @@ public partial class App : Application
             if (args.ExceptionObject is Exception ex) Log.Error(args.IsTerminating ? "Fatal error" : "Unhandled error", ex);
             if (args.IsTerminating) ReleaseFansQuietly(); // never leave a fan at a fixed speed behind
         };
-        SessionEnding += (_, _) => ReleaseFansQuietly(); // sign-out / shutdown
+        SessionEnding += (_, _) => // sign-out / shutdown: Windows ends Kelvra without Quit()
+        {
+            ReleaseFansQuietly();
+            if (Game == null) return;
+            try
+            {
+                SaveRunningGame();
+                Task.WaitAll(_benchmarkWrites.ToArray(), TimeSpan.FromSeconds(10));
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Saving the game session at sign-out", ex);
+            }
+        };
         TaskScheduler.UnobservedTaskException += (_, args) =>
         {
             Log.Error("Unobserved background task error", args.Exception);
@@ -81,8 +98,22 @@ public partial class App : Application
         WatchAlertRules();
 
         Sensors = new SensorStore();
-        Overlays = new OverlayManager(Settings, Sensors);
+        Game = new GameMonitor(Settings);
+        bool gameSensorsShown = false;
+        Sensors.ExtraReadings = () =>
+        {
+            // Once shown, keep the Game device (empty values) even if measuring is switched off
+            if (!Settings.GameFpsEnabled && !gameSensorsShown) return null;
+            gameSensorsShown = true;
+            return GameSensors.Readings(Game.Current(), Game.ActiveGame != null);
+        };
+        Overlays = new OverlayManager(Settings, Sensors)
+        {
+            GameVisible = () => Game.GameVisible,
+            GameActive = () => Game.ActiveGame != null,
+        };
         Overlays.Dirty += MarkDirty;
+        Game.Changed += Overlays.Sync;
 
         MainView = new MainWindow();
         new WindowInteropHelper(MainView).EnsureHandle(); // hotkeys need a handle even when starting in the tray
@@ -123,6 +154,10 @@ public partial class App : Application
         PawnIoPromptWindow.ShowIfNeeded(Settings, MainView);
         MarkDirty();
 
+        if (afterUpdate) Tray.Notify("Kelvra was updated", $"You're now on version {Updater.CurrentVersion.ToString(3)}.");
+        StartUpdateChecks();
+        Game.ApplyEnabled();
+
         // --- Data flow: each poll updates overlays, history and alerts; each history sample feeds the CSV logger ---
         Sensors.FirstLoad += OnFirstLoad;
         Sensors.Updated += Overlays.UpdateValues;
@@ -134,6 +169,16 @@ public partial class App : Application
             _fanClock.Restart();
             Fans.Tick(Settings.Fans, Sensors, seconds, Sensors.RequestFan);
         };
+        Sensors.Updated += TrackGameTemperatures;
+        Game.GameEnded += SaveGameSession;
+        Game.GameStarted += game =>
+        {
+            // Only for people who use the gaming overlay; everyone else isn't interrupted in their games
+            if (!Settings.Overlays.Any(p => p.Enabled && p.ShowOnlyInGames) || !Settings.GameOverlaysVisible) return;
+            string key = Settings.HotkeyBenchmark.Length > 0 ? $" · {Settings.HotkeyBenchmark} records a benchmark" : "";
+            OsdToast.Notify($"Kelvra: {game.Name} detected", "Measuring FPS" + key, seconds: 3);
+        };
+        Game.BenchmarkEnded += SaveBenchmark;
         History.Sampled += Logger.OnSample;
         Alerts.Fired += e =>
         {
@@ -192,6 +237,244 @@ public partial class App : Application
         if (ok) return;
         Log.Warn("Updating the Start with Windows task failed: " + error);
         Tray.Notify("Start with Windows needs attention", $"Kelvra couldn't update its sign-in task, so it may not start with Windows.\n{error}");
+    }
+
+    // ---------- game sessions and benchmarks ----------
+
+    /// <summary>Hottest CPU and GPU temperatures while a game (and a benchmark) runs, for their summaries.</summary>
+    private void TrackGameTemperatures()
+    {
+        if (Game.ActiveGame is not { } game) return;
+        float? cpu = Sensors.All.Where(s => s.HardwareType == LibreHardwareMonitor.Hardware.HardwareType.Cpu &&
+                                            s.Type == LibreHardwareMonitor.Hardware.SensorType.Temperature &&
+                                            (s.Name.Contains("Package") || s.Name.Contains("Tctl")))
+                                .Select(s => s.Value).FirstOrDefault(v => v is not null);
+        cpu ??= Sensors.All.Where(s => s.HardwareType == LibreHardwareMonitor.Hardware.HardwareType.Cpu &&
+                                       s.Type == LibreHardwareMonitor.Hardware.SensorType.Temperature).Max(s => s.Value);
+        float? gpu = Sensors.All.Where(s => s.IsGpu && s.Type == LibreHardwareMonitor.Hardware.SensorType.Temperature && s.Name.Contains("Core"))
+                                .Max(s => s.Value);
+
+        static float? Hotter(float? a, float? b) => a is float x && b is float y ? Math.Max(x, y) : a ?? b;
+        game.MaxCpuTemp = Hotter(game.MaxCpuTemp, cpu);
+        game.MaxGpuTemp = Hotter(game.MaxGpuTemp, gpu);
+        if (Game.Benchmark is { } run)
+        {
+            run.MaxCpuTemp = Hotter(run.MaxCpuTemp, cpu);
+            run.MaxGpuTemp = Hotter(run.MaxGpuTemp, gpu);
+        }
+    }
+
+    /// <summary>On exit or Windows sign-out/shutdown: keep the running benchmark and game session.</summary>
+    private void SaveRunningGame()
+    {
+        if (Game.StopBenchmark() is { } run) SaveBenchmark(run);
+        if (Game.ActiveGame is { } game) SaveGameSession(game);
+    }
+
+    private void SaveGameSession(GameSession game)
+    {
+        var summary = GameSessionSummary.From(game.Name, game.Started, game.Stats, game.MaxCpuTemp, game.MaxGpuTemp);
+        if (TimeSpan.FromSeconds(summary.Seconds) < GameSessionLog.MinLength) return;
+        SaveSummary(summary);
+    }
+
+    /// <summary>The benchmark shortcut: starts recording the running game, or stops and saves the run.</summary>
+    public void ToggleBenchmark()
+    {
+        string key = Settings.HotkeyBenchmark.Length > 0 ? Settings.HotkeyBenchmark : "the benchmark shortcut";
+        if (Game.StopBenchmark() is { } run)
+        {
+            SaveBenchmark(run);
+            return;
+        }
+        if (!Settings.GameFpsEnabled)
+        {
+            OsdToast.Notify("Benchmark not started", "FPS measuring is off. Turn it on in Kelvra → Settings → Gaming.", OsdToast.Red, 5);
+            return;
+        }
+        if (!Game.StartBenchmark())
+        {
+            OsdToast.Notify("Benchmark not started", $"Kelvra hasn't detected a game yet. Play for a few seconds, then press {key} again.", OsdToast.Red, 5);
+            return;
+        }
+        OsdToast.Notify("● Benchmark recording", $"{Game.ActiveGame?.Name} · press {key} again to stop", OsdToast.Red);
+        Tray.Notify("Benchmark started", $"Recording {Game.ActiveGame?.Name}. Press {key} again to stop.");
+    }
+
+    /// <summary>
+    /// Writes the run's frames to a CSV on a worker thread (millions of lines mustn't freeze the window), then logs its
+    /// summary. While quitting it waits for the file instead, so nothing is lost.
+    /// </summary>
+    private void SaveBenchmark(BenchmarkRun run)
+    {
+        string safe = string.Concat(run.Game.Name.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
+        string csv = Path.Combine(CsvLogger.DefaultFolder, $"Benchmark {safe} {run.Started:yyyy-MM-dd HH-mm-ss}.csv");
+        var summary = GameSessionSummary.From(run.Game.Name, run.Started, run.Stats, run.MaxCpuTemp, run.MaxGpuTemp, benchmark: true, csvFile: csv);
+        string length = summary.When.Split(" · ").Last();
+        if (!IsQuitting) OsdToast.Notify("■ Benchmark stopped and saved", $"{summary.FpsLine} · {length}", OsdToast.Green, 6);
+
+        // The summary first (History hides the CSV button until the file exists), then the frames in the background.
+        // Complete: no frames are added once the run is stopped.
+        SaveSummary(summary);
+        Tray.Notify("Benchmark saved", $"{summary.FpsLine} · {length}\nDetails: History → Game sessions.");
+        var write = Task.Run(() =>
+        {
+            try
+            {
+                GameSessionLog.WriteFrames(csv, run.Frames);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Log.Error("Saving benchmark frames", ex);
+                try { File.Delete(csv); } catch (Exception cleanup) when (cleanup is IOException or UnauthorizedAccessException) { }
+            }
+        });
+        _benchmarkWrites.Add(write);
+        _benchmarkWrites.RemoveAll(t => t.IsCompleted);
+        if (IsQuitting) write.Wait();
+    }
+
+    /// <summary>Benchmark CSVs still being written; Quit waits for them so no file is cut off.</summary>
+    private readonly List<Task> _benchmarkWrites = new();
+
+    private void SaveSummary(GameSessionSummary summary)
+    {
+        try
+        {
+            GameSessionLog.Append(summary, GameSessionLog.DefaultFile);
+            GameSessionsChanged?.Invoke();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Error("Saving the game session", ex);
+        }
+    }
+
+    /// <summary>A session or benchmark was added to History → Game sessions.</summary>
+    public event Action? GameSessionsChanged;
+
+    /// <summary>After an update the old Kelvra is still closing: wait for it to let go of the single-instance lock.</summary>
+    private static bool WaitForPreviousInstance(Mutex mutex)
+    {
+        try { return mutex.WaitOne(TimeSpan.FromSeconds(15)); }
+        catch (AbandonedMutexException) { return true; } // it exited without releasing the lock: it's ours now
+    }
+
+    // ---------- updates ----------
+
+    private DispatcherTimer? _updateTimer;
+    private UpdateInfo? _latestUpdate; // what the last successful check found (null = up to date)
+    private DateTime _lastUpdateCheckUtc = DateTime.MinValue;
+    private UpdateInfo? _pendingUpdate; // found while the window was hidden: offered when it opens
+    private bool _updatePromptOpen;
+
+    /// <summary>
+    /// First check 15 s after startup, then an hourly tick: GitHub is asked once a day, and an update the user
+    /// declined is offered again as soon as its 24 h pause is over.
+    /// </summary>
+    private void StartUpdateChecks()
+    {
+        _updateTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
+        _updateTimer.Tick += async (_, _) =>
+        {
+            _updateTimer.Interval = TimeSpan.FromHours(1);
+            Updater.CleanupOldVersion(); // the previous exe, once the update's restart is done with it
+            if (!Settings.CheckForUpdates) return;
+            if (DateTime.UtcNow - _lastUpdateCheckUtc >= TimeSpan.FromHours(24))
+                await CheckForUpdatesAsync(manual: false);
+            else if (_latestUpdate != null && Updater.ShouldPrompt(_latestUpdate, Settings, DateTime.UtcNow))
+                OfferUpdate(_latestUpdate);
+        };
+        _updateTimer.Start();
+        MainView.IsVisibleChanged += (_, _) => OfferPendingUpdate();
+        MainView.StateChanged += (_, _) => OfferPendingUpdate();
+        Game.Changed += OfferPendingUpdate; // the game was closed or left
+    }
+
+    /// <summary>
+    /// Asks GitHub for a newer release and offers it. Returns it, or null when Kelvra is up to date.
+    /// A manual check (Settings → About) ignores the "Not now" pause and throws network errors; an automatic one only logs them.
+    /// </summary>
+    public async Task<UpdateInfo?> CheckForUpdatesAsync(bool manual)
+    {
+        UpdateInfo? update;
+        try
+        {
+            update = await Updater.CheckAsync();
+        }
+        catch (Exception ex) when (!manual && Updater.IsCheckError(ex))
+        {
+            Log.Warn("Update check failed: " + ex.Message);
+            return null;
+        }
+        _lastUpdateCheckUtc = DateTime.UtcNow;
+        _latestUpdate = update;
+        if (update != null && (manual || Updater.ShouldPrompt(update, Settings, DateTime.UtcNow))) OfferUpdate(update, manual);
+        return update;
+    }
+
+    private bool MainWindowShown => MainView.IsVisible && MainView.WindowState != WindowState.Minimized;
+
+    /// <summary>
+    /// Shows the update prompt, or a notification and the prompt later: once the window opens (Kelvra in the tray) or
+    /// once you stop playing – a dialog popping up in the middle of a game would be unwelcome. A manual check asks at once.
+    /// </summary>
+    private void OfferUpdate(UpdateInfo update, bool manual = false)
+    {
+        if (_updatePromptOpen || IsQuitting) return;
+        if (!MainWindowShown || (!manual && Game.GameVisible))
+        {
+            if (_pendingUpdate?.Version != update.Version)
+                Tray.Notify($"Kelvra {update.Version.ToString(3)} is available",
+                            Game.GameVisible ? "Kelvra will ask after your game." : "Open Kelvra to install it.");
+            _pendingUpdate = update;
+            return;
+        }
+
+        _pendingUpdate = null;
+        _updatePromptOpen = true;
+        var choice = UpdatePromptWindow.Ask(update, MainView);
+        _updatePromptOpen = false;
+        if (choice == UpdateChoice.Installed)
+        {
+            RestartAfterUpdate();
+            return;
+        }
+        Settings.UpdateDeclinedVersion = update.Version.ToString(3);
+        Settings.UpdateDeclinedAtUtc = DateTime.UtcNow;
+        MarkDirty();
+    }
+
+    private void OfferPendingUpdate()
+    {
+        if (_pendingUpdate is not UpdateInfo update || !MainWindowShown || Game.GameVisible) return;
+        // Once the window has finished appearing, not in the middle of showing it
+        Dispatcher.InvokeAsync(() =>
+        {
+            if (_pendingUpdate == update) OfferUpdate(update);
+        }, DispatcherPriority.ApplicationIdle);
+    }
+
+    /// <summary>Starts the newly installed exe (it waits for this one to close) and exits.</summary>
+    private void RestartAfterUpdate()
+    {
+        string exe = Environment.ProcessPath!;
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe, Updater.AfterUpdateArg)
+            {
+                UseShellExecute = true,
+                WorkingDirectory = Path.GetDirectoryName(exe),
+            });
+        }
+        catch (Win32Exception ex)
+        {
+            Log.Error("Restarting after the update", ex);
+            MessageBox.Show(MainView, $"Kelvra was updated but couldn't restart itself:\n{ex.Message}\n\nThe new version starts the next time you open Kelvra.",
+                "Kelvra", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        Quit();
     }
 
     /// <summary>The mini window, while it's open.</summary>
@@ -261,6 +544,9 @@ public partial class App : Application
         if (Settings.KeepHistory) History.Save(HistoryService.DefaultFile);
         Log.Info("Kelvra exiting");
         Overlays.CloseAll();
+        SaveRunningGame();
+        Task.WaitAll(_benchmarkWrites.ToArray(), TimeSpan.FromSeconds(30));
+        Game.Dispose(); // stops PresentMon and its trace session
         Tray.Dispose();
         Sensors.Dispose();
         Shutdown();

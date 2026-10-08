@@ -12,10 +12,22 @@ public sealed class OverlayManager
     public event Action? Dirty;
     public event Action? StateChanged;
 
+    /// <summary>Game numbers refresh 4× a second while a game runs; everything else follows the sensor poll.</summary>
+    private readonly System.Windows.Threading.DispatcherTimer _gameTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
+
+    /// <summary>A game is being measured (set by the app); the fast refresh only runs then.</summary>
+    public Func<bool> GameActive { get; set; } = () => false;
+
     public OverlayManager(AppSettings settings, SensorStore store)
     {
         _settings = settings;
         _store = store;
+        _gameTimer.Tick += (_, _) =>
+        {
+            if (!GameActive()) return;
+            foreach (var w in _windows.Values) w.UpdateGameValues();
+        };
+        _gameTimer.Start();
         foreach (var p in settings.Overlays) p.Changed += OnProfileChanged;
         settings.Overlays.CollectionChanged += OnOverlaysChanged;
     }
@@ -42,11 +54,35 @@ public sealed class OverlayManager
         if (!lockAll) Visible = true;
     }
 
+    /// <summary>
+    /// A game can be seen (set by the app from <see cref="GameMonitor.GameVisible"/>): in front, or on its own monitor
+    /// while you use another one. Gaming overlays only show then.
+    /// </summary>
+    public Func<bool> GameVisible { get; set; } = () => false;
+
+    /// <summary>Gaming overlays on/off (their own hotkey), separate from <see cref="Visible"/>.</summary>
+    public bool GameOverlaysVisible
+    {
+        get => _settings.GameOverlaysVisible;
+        set
+        {
+            if (_settings.GameOverlaysVisible == value) return;
+            _settings.GameOverlaysVisible = value;
+            Sync();
+            Dirty?.Invoke();
+        }
+    }
+
+    /// <summary>Whether a profile's window should be on screen now. Unlocked gaming overlays show anyway, so they can be placed.</summary>
+    internal static bool Wanted(OverlayProfile p, bool visible, bool gameOverlaysVisible, bool gameVisible) =>
+        visible && p.Enabled && (!p.ShowOnlyInGames || !p.Locked || (gameOverlaysVisible && gameVisible));
+
     public void Sync()
     {
+        bool game = GameVisible();
         foreach (var p in _settings.Overlays)
         {
-            bool want = Visible && p.Enabled;
+            bool want = Wanted(p, Visible, GameOverlaysVisible, game);
             bool has = _windows.ContainsKey(p);
             if (want && !has)
             {
@@ -129,7 +165,8 @@ public sealed class OverlayManager
 
     private void OnProfileChanged(object? sender, string property)
     {
-        if (property == nameof(OverlayProfile.Enabled)) Sync();
+        if (property is nameof(OverlayProfile.Enabled) or nameof(OverlayProfile.ShowOnlyInGames)) Sync();
+        else if (property == nameof(OverlayProfile.Locked) && sender is OverlayProfile { ShowOnlyInGames: true }) Sync();
         if (property is nameof(OverlayProfile.Enabled) or nameof(OverlayProfile.Locked)) StateChanged?.Invoke();
         Dirty?.Invoke();
     }

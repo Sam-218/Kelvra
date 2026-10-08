@@ -19,6 +19,7 @@ public static class SensorCategories
         new("Cooling", ""),
         new("Battery", ""),
         new("Power supply", ""),
+        new("Game", "\uE7FC"),
         new("Other", ""),
     };
 
@@ -33,6 +34,7 @@ public static class SensorCategories
         new("Fans", ""),
         new("Data", ""),
         new("Throughput", ""),
+        new("Frames", "\uE7FC"),
         new("Other", ""),
     };
 
@@ -47,6 +49,7 @@ public static class SensorCategories
         HardwareType.Cooler => "Cooling",
         HardwareType.Battery => "Battery",
         HardwareType.Psu => "Power supply",
+        GameSensors.Hardware => "Game",
         _ => "Other",
     };
 
@@ -60,6 +63,7 @@ public static class SensorCategories
         SensorType.Fan or SensorType.Control or SensorType.Flow => "Fans",
         SensorType.Data or SensorType.SmallData => "Data",
         SensorType.Throughput => "Throughput",
+        GameSensors.Fps or GameSensors.Milliseconds or GameSensors.Count => "Frames",
         _ => "Other",
     };
 

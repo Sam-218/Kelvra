@@ -8,6 +8,8 @@ public readonly record struct Hotkey(ModifierKeys Modifiers, Key Key)
     // F-keys with Ctrl+Alt: no program we know of uses them, and AltGr (= Ctrl+Alt) types nothing with F-keys
     public const string DefaultOverlays = "Ctrl+Alt+F10";
     public const string DefaultLock = "Ctrl+Alt+F11";
+    public const string DefaultGameOverlays = "Ctrl+Alt+F8";
+    public const string DefaultBenchmark = "Ctrl+Alt+F9";
 
     /// <summary>Shortcuts other popular programs use, so picking one gets a warning even when Windows would allow it.</summary>
     private static readonly Dictionary<string, string> KnownUses = new(StringComparer.OrdinalIgnoreCase)

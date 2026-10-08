@@ -13,7 +13,7 @@
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AssemblyName>Kelvra</AssemblyName>
     <Product>Kelvra</Product>
-    <Version>1.3.0</Version>
+    <Version>1.4.0</Version>
     <Description>Hardware monitor, in-game overlays and PC toolkit for Windows.</Description>
     <Copyright>Copyright © 2026 Kelvra contributors</Copyright>
   </PropertyGroup>
@@ -67,6 +67,33 @@
                   SourceUrl="https://github.com/namazso/PawnIO.Setup/releases/download/$(PawnIOVersion)/PawnIO_setup.exe"
                   DestinationFolder="$(PawnIODir)" />
     <VerifyFileHash File="$(PawnIOSetup)" Hash="$(PawnIOSha256)" Algorithm="SHA256" />
+  </Target>
+
+  <!--
+    Intel PresentMon console (https://github.com/GameTechDev/PresentMon, MIT). Measures FPS and frame times in games.
+    Same handling as PawnIO: downloaded from the official release at build time, hash-checked, embedded.
+  -->
+  <PropertyGroup>
+    <PresentMonVersion>2.6.0</PresentMonVersion>
+    <PresentMonSha256>B2A706BC6AD475749E3B7E3409263AA1E6906D45BDCF993F6DBC0F660188F1AF</PresentMonSha256>
+    <PresentMonDir>$(MSBuildProjectDirectory)\Assets\PresentMon\$(PresentMonVersion)</PresentMonDir>
+    <PresentMonExe>$(PresentMonDir)\PresentMon-$(PresentMonVersion)-x64.exe</PresentMonExe>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="$(PresentMonExe)" LogicalName="PresentMon.exe" />
+    <!-- Checked again at runtime, right before the extracted exe is started -->
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>PresentMonSha256</_Parameter1>
+      <_Parameter2>$(PresentMonSha256)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <Target Name="DownloadPresentMon" BeforeTargets="PrepareForBuild">
+    <DownloadFile Condition="!Exists('$(PresentMonExe)')"
+                  SourceUrl="https://github.com/GameTechDev/PresentMon/releases/download/v$(PresentMonVersion)/PresentMon-$(PresentMonVersion)-x64.exe"
+                  DestinationFolder="$(PresentMonDir)" />
+    <VerifyFileHash File="$(PresentMonExe)" Hash="$(PresentMonSha256)" Algorithm="SHA256" />
   </Target>
 
 </Project>

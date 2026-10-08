@@ -238,6 +238,8 @@ public static class SensorFormat
         SensorType.Energy => "mWh",
         SensorType.Noise => "dBA",
         SensorType.TimeSpan => "s",
+        GameSensors.Fps => "FPS",
+        GameSensors.Milliseconds => "ms",
         _ => "",
     };
 
@@ -261,6 +263,9 @@ public static class SensorFormat
             SensorType.Energy => $"{v.ToString("0", Inv)} mWh",
             SensorType.Noise => $"{v.ToString("0", Inv)} dBA",
             SensorType.TimeSpan => Duration(v),
+            GameSensors.Fps => $"{v.ToString("0", Inv)} FPS",
+            GameSensors.Milliseconds => $"{v.ToString("0.0", Inv)} ms",
+            GameSensors.Count => v.ToString("0", Inv),
             _ => v.ToString("0.##", Inv),
         };
     }
@@ -290,6 +295,9 @@ public static class SensorFormat
         SensorType.Control => "Fan Control",
         SensorType.Data or SensorType.SmallData => "Data",
         SensorType.Throughput => "Throughput",
+        GameSensors.Fps => "Frame rate",
+        GameSensors.Milliseconds => "Frame time",
+        GameSensors.Count => "Count",
         _ => type.ToString(),
     };
 }

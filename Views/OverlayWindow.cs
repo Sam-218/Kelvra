@@ -180,6 +180,12 @@ public sealed class OverlayWindow : Window
         Dispatcher.BeginInvoke(PlaceAtAnchor, System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
+    /// <summary>Only the game numbers, between sensor polls (see <see cref="OverlayManager"/>).</summary>
+    public void UpdateGameValues()
+    {
+        if (_view.HasGameItems) _view.UpdateValues(gameOnly: true);
+    }
+
     public void UpdateValues()
     {
         _view.UpdateValues();

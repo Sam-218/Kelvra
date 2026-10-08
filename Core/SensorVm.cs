@@ -112,7 +112,38 @@ public sealed class SensorVm : ObservableObject
 /// <summary>Ready-made starting points for new overlays.</summary>
 public static class OverlayTemplates
 {
-    public static readonly string[] Names = { "Blank", "Essentials", "Temperatures", "Compact bar" };
+    public static readonly string[] Names = { "Blank", "Gaming", "Essentials", "Temperatures", "Compact bar" };
+
+    /// <summary>CPU load and temperature, GPU load and temperature, and VRAM: the hardware rows of the gaming overlay.</summary>
+    public static string[] GamingHardware(IReadOnlyList<SensorVm> sensors)
+    {
+        static bool Cpu(SensorVm s) => s.HardwareType == HardwareType.Cpu;
+        var picks = new Func<SensorVm, bool>[][]
+        {
+            new Func<SensorVm, bool>[] { s => Cpu(s) && s.Type == SensorType.Load && s.Name.Contains("Total") },
+            new Func<SensorVm, bool>[]
+            {
+                s => Cpu(s) && s.Type == SensorType.Temperature && (s.Name.Contains("Package") || s.Name.Contains("Tctl")),
+                s => Cpu(s) && s.Type == SensorType.Temperature,
+            },
+            new Func<SensorVm, bool>[] { s => s.IsGpu && s.Type == SensorType.Load && s.Name.Contains("Core") },
+            new Func<SensorVm, bool>[] { s => s.IsGpu && s.Type == SensorType.Temperature && s.Name.Contains("Core") },
+            new Func<SensorVm, bool>[]
+            {
+                s => s.IsGpu && s.Type == SensorType.SmallData && s.Name == "GPU Memory Used",
+                s => s.IsGpu && s.Type == SensorType.SmallData && s.Name.Contains("Memory Used"),
+            },
+        };
+        var ids = new List<string>();
+        foreach (var matchers in picks)
+            foreach (var match in matchers)
+                if (sensors.FirstOrDefault(s => match(s) && !ids.Contains(s.Id)) is { } hit)
+                {
+                    ids.Add(hit.Id);
+                    break;
+                }
+        return ids.ToArray();
+    }
 
     /// <summary>Builds a new profile from a template, picking matching sensors from what was actually detected.</summary>
     public static OverlayProfile Create(string template, IReadOnlyList<SensorVm> sensors, string name)
@@ -150,6 +181,16 @@ public static class OverlayTemplates
 
         switch (template)
         {
+            case "Gaming":
+                // Shows up by itself over games; FPS values big and in front
+                p.ShowOnlyInGames = true;
+                p.Anchor = OverlayAnchor.TopLeft;
+                p.ShowHeaders = false;
+                p.ValueScale = 1.15;
+                foreach (var m in GameOverlay.Modules.Where(m => GameOverlay.DefaultModules.Contains(m.Key)))
+                    GameOverlay.Set(p, m, true, sensors);
+                break;
+
             case "Essentials":
                 Add(null, false, cpuLoad);
                 Add(null, false, cpuTemp, cpuTempAny);

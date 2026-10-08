@@ -34,6 +34,22 @@ public sealed class AppSettings
     public bool Fahrenheit { get; set; }
     public bool StartWithWindows { get; set; }
 
+    // Gaming (Settings → Gaming)
+    /// <summary>Run PresentMon to measure FPS and frame times in games.</summary>
+    public bool GameFpsEnabled { get; set; } = true;
+    /// <summary>Exe names that always count as games (e.g. windowed games), and ones that never do.</summary>
+    public List<string> GameAlways { get; set; } = new();
+    public List<string> GameNever { get; set; } = new();
+    /// <summary>Overlays set to "only while a game is running" are shown (their own hotkey toggles this).</summary>
+    public bool GameOverlaysVisible { get; set; } = true;
+
+    // Updates (Settings → About)
+    /// <summary>Ask GitHub once a day whether a newer Kelvra release exists.</summary>
+    public bool CheckForUpdates { get; set; } = true;
+    /// <summary>The release the user answered "Not now" to, and when: it's offered again 24 h later (a newer one at once).</summary>
+    public string? UpdateDeclinedVersion { get; set; }
+    public DateTime? UpdateDeclinedAtUtc { get; set; }
+
     // Alerts
     public ObservableCollection<AlertRule> Alerts { get; set; } = new();
     public bool AlertSound { get; set; } = true;
@@ -79,6 +95,10 @@ public sealed class AppSettings
     // Global shortcuts ("" = off). The old Ctrl+Shift+O/L took those keys away from Chrome, Excel and VS Code.
     public string HotkeyOverlays { get; set; } = Hotkey.DefaultOverlays;
     public string HotkeyLock { get; set; } = Hotkey.DefaultLock;
+    /// <summary>Shows/hides the gaming overlays only.</summary>
+    public string HotkeyGameOverlays { get; set; } = Hotkey.DefaultGameOverlays;
+    /// <summary>Starts/stops a benchmark recording of the running game.</summary>
+    public string HotkeyBenchmark { get; set; } = Hotkey.DefaultBenchmark;
 
     /// <summary>Why the last save failed (null = it worked). The app tells the user once per new error.</summary>
     [JsonIgnore] public string? LastSaveError { get; private set; }
@@ -143,6 +163,8 @@ public sealed class AppSettings
         if (HistoryMinutes is not (1 or 5 or 15 or 60 or 360 or 1440)) HistoryMinutes = 5;
         if (HotkeyOverlays is null || (HotkeyOverlays.Length > 0 && !Hotkey.TryParse(HotkeyOverlays, out _))) HotkeyOverlays = Hotkey.DefaultOverlays;
         if (HotkeyLock is null || (HotkeyLock.Length > 0 && !Hotkey.TryParse(HotkeyLock, out _))) HotkeyLock = Hotkey.DefaultLock;
+        if (HotkeyGameOverlays is null || (HotkeyGameOverlays.Length > 0 && !Hotkey.TryParse(HotkeyGameOverlays, out _))) HotkeyGameOverlays = Hotkey.DefaultGameOverlays;
+        if (HotkeyBenchmark is null || (HotkeyBenchmark.Length > 0 && !Hotkey.TryParse(HotkeyBenchmark, out _))) HotkeyBenchmark = Hotkey.DefaultBenchmark;
         if (LogIntervalSeconds is not (1 or 5 or 10 or 60)) LogIntervalSeconds = 1;
         if (DuplicateMinSizeMb is not (1 or 10 or 100)) DuplicateMinSizeMb = 1;
         Theme ??= "System";
@@ -156,6 +178,8 @@ public sealed class AppSettings
         CollapsedGroups ??= new();
         GroupOrder ??= new();
         SystemCardOrder ??= new();
+        GameAlways = (GameAlways ?? new()).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        GameNever = (GameNever ?? new()).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         RemoveNulls(Alerts);
         RemoveNulls(Overlays);
         Fans = (Fans ?? new()).Where(f => f != null && !string.IsNullOrEmpty(f.ControlId)).GroupBy(f => f.ControlId).Select(g => g.First()).ToList();

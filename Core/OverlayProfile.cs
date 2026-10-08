@@ -113,6 +113,7 @@ public sealed class OverlayProfile : ObservableObject
     private float _warmTemp = 70, _hotTemp = 85, _warmLoad = 80, _hotLoad = 95;
     private int _graphSeconds = 60;
     private int _graphWidth = 60;
+    private bool _showOnlyInGames;
     private OverlayAnchor _anchor = OverlayAnchor.Custom;
     private int _edgeMargin = 20;
     private string _monitor = "";
@@ -189,6 +190,8 @@ public sealed class OverlayProfile : ObservableObject
     public bool ClockSeconds { get => _clockSeconds; set => Set(ref _clockSeconds, value); }
 
     // ----- position -----
+    /// <summary>A gaming overlay: shown only while a game is in the foreground (and while unlocked, to place it).</summary>
+    public bool ShowOnlyInGames { get => _showOnlyInGames; set => Set(ref _showOnlyInGames, value); }
     public OverlayAnchor Anchor { get => _anchor; set => Set(ref _anchor, Enum.IsDefined(value) ? value : OverlayAnchor.Custom); }
     /// <summary>Distance from the screen edge when anchored, in px.</summary>
     public int EdgeMargin { get => _edgeMargin; set => Set(ref _edgeMargin, Math.Clamp(value, 0, 400)); }
@@ -209,15 +212,21 @@ public sealed class OverlayProfile : ObservableObject
 
     [JsonIgnore] public string Summary => Items.Count == 1 ? "1 sensor" : $"{Items.Count} sensors";
 
-    /// <summary>Warning limits (raw units) for an item: its own, else the overlay's for temperature/load; null = never warns.</summary>
-    public (float Warm, float Hot)? Limits(OverlayItem item, LibreHardwareMonitor.Hardware.SensorType type)
+    /// <summary>
+    /// Warning limits (raw units) for an item: its own, else the overlay's for temperature/load, and 60/30 for FPS;
+    /// null = never warns. For FPS a low value is the bad one (<c>LowIsBad</c>).
+    /// </summary>
+    public (float Warm, float Hot, bool LowIsBad)? Limits(OverlayItem item, LibreHardwareMonitor.Hardware.SensorType type)
     {
+        bool lowIsBad = type == GameSensors.Fps;
+        float unset = lowIsBad ? float.MinValue : float.MaxValue;
         if (item.WarnAt is not null || item.HotAt is not null)
-            return (item.WarnAt ?? float.MaxValue, item.HotAt ?? float.MaxValue);
+            return (item.WarnAt ?? unset, item.HotAt ?? unset, lowIsBad);
         return type switch
         {
-            LibreHardwareMonitor.Hardware.SensorType.Temperature => (WarmTemp, HotTemp),
-            LibreHardwareMonitor.Hardware.SensorType.Load => (WarmLoad, HotLoad),
+            LibreHardwareMonitor.Hardware.SensorType.Temperature => (WarmTemp, HotTemp, false),
+            LibreHardwareMonitor.Hardware.SensorType.Load => (WarmLoad, HotLoad, false),
+            GameSensors.Fps => (60, 30, true),
             _ => null,
         };
     }
@@ -301,9 +310,11 @@ public static class OverlayExtras
     /// <summary>Default overlay label, or null if the id isn't an extra.</summary>
     public static string? NameOf(string id) =>
         id.StartsWith(ZonePrefix) ? id[ZonePrefix.Length..].Replace(" Standard Time", "")
+        : GameOverlay.IsExtra(id) ? GameOverlay.NameOf(id)
         : All.FirstOrDefault(e => e.Id == id).Name;
 
-    public static string GroupOf(string id) => id.StartsWith(ZonePrefix) ? ZoneGroup : Group;
+    public static string GroupOf(string id) =>
+        id.StartsWith(ZonePrefix) ? ZoneGroup : GameOverlay.IsExtra(id) ? GameOverlay.Group : Group;
 
     public static string ZoneId(string windowsZoneId) => ZonePrefix + windowsZoneId;
 
@@ -333,8 +344,13 @@ public static class OverlayExtras
         };
     }
 
-    /// <summary>Stand-in sensors so the sensor picker can list the clock extras (time zones are added by place name instead).</summary>
-    public static List<SensorVm> PickerItems() => All.Select(e => new SensorVm(
-        new SensorReading(e.Id, "extra", Group, LibreHardwareMonitor.Hardware.HardwareType.Motherboard, e.Name,
-                          LibreHardwareMonitor.Hardware.SensorType.Factor, null, null, null), Group)).ToList();
+    /// <summary>
+    /// Stand-in sensors so the sensor picker can list the clock and game extras (time zones are added by place name instead).
+    /// </summary>
+    public static List<SensorVm> PickerItems() =>
+        All.Select(e => new SensorVm(new SensorReading(e.Id, "extra", Group, LibreHardwareMonitor.Hardware.HardwareType.Motherboard, e.Name,
+                                                       LibreHardwareMonitor.Hardware.SensorType.Factor, null, null, null), Group))
+           .Concat(GameOverlay.Extras.Select(e => new SensorVm(new SensorReading(e.Id, GameSensors.HardwareId, GameOverlay.Group,
+                                                       GameSensors.Hardware, e.Name, GameSensors.Count, null, null, null), GameOverlay.Group)))
+           .ToList();
 }

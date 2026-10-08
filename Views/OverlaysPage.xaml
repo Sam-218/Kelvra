@@ -171,6 +171,14 @@
                     <!-- ===== Sensors ===== -->
                     <Border x:Name="SensorsTab" Style="{StaticResource Card}" Margin="0">
                         <StackPanel>
+                            <!-- gaming overlays: one switch per module -->
+                            <StackPanel x:Name="GameModulesPanel" Visibility="Collapsed" Margin="0,0,0,14">
+                                <TextBlock Text="Gaming modules" Style="{StaticResource H2}" />
+                                <TextBlock x:Name="GameModulesHint" Style="{StaticResource Muted}" Margin="0,-6,0,10" TextWrapping="Wrap"
+                                           Text="Turn on what you want to see. The preview shows sample numbers until a game runs." />
+                                <WrapPanel x:Name="GameModuleSwitches" />
+                                <Rectangle Height="1" Fill="{DynamicResource LineBrush}" Margin="0,8,0,0" />
+                            </StackPanel>
                             <Grid Margin="0,0,0,10">
                                 <TextBlock Text="What it shows" Style="{StaticResource H2}" Margin="0" VerticalAlignment="Center" />
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
@@ -595,6 +603,13 @@
                             <TextBlock Text="Where it sits" Style="{StaticResource H2}" />
                             <TextBlock Style="{StaticResource Muted}" Margin="0,-6,0,12"
                                        Text="Pin it to a corner or edge so it stays put when the resolution changes, or choose Free and drag it (unlock it first)." />
+                            <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding ShowOnlyInGames}" Margin="0,0,0,14">
+                                <StackPanel>
+                                    <TextBlock Text="Only while a game is running" />
+                                    <TextBlock x:Name="GameOnlyHint" Style="{StaticResource Muted}" TextWrapping="Wrap"
+                                               Text="Appears by itself over games and hides when the game is minimized or covered. With several monitors it stays while you use another screen. While it's unlocked it stays visible, so you can place it." />
+                                </StackPanel>
+                            </CheckBox>
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />

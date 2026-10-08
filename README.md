@@ -34,7 +34,19 @@
 - Per sensor: custom label (or none), its own colour, decimal places, a fill bar, a mini graph, and its own warning limits; warning colours and limits per overlay.
 - Position: drag it anywhere, or pin it to any corner or edge of any monitor.
 - Click-through while locked; `Ctrl+Alt+F11` unlocks them for dragging, `Ctrl+Alt+F10` shows/hides them. Both shortcuts can be changed (or turned off) under *Settings → Shortcuts*, which also warns when another program uses the same keys.
-- Templates: Essentials, Temperatures, Compact bar. Export an overlay to a `.kelvra-overlay.json` file and import ones others shared.
+- Templates: Gaming, Essentials, Temperatures, Compact bar. Export an overlay to a `.kelvra-overlay.json` file and import ones others shared.
+
+**Gaming overlay & FPS**
+- FPS and frame times of the game you're playing, measured with Intel PresentMon (DirectX 9–12, Vulkan, OpenGL).
+- The *Gaming* overlay appears by itself while a game is in the foreground and hides on the desktop (`Ctrl+Alt+F8` hides it on demand). Turn each part on or off:
+  - **FPS** and **frametime**, **1% / 0.1% lows** (last minute), session **average / min / max**
+  - a live **frametime graph** of every frame with stutters marked, and a **stutter** counter
+  - **bottleneck**: GPU-bound, CPU-bound, or capped by a limiter / VSync
+  - **latency** (frame start until it's on screen), **game name**, **play time**, and CPU / GPU load and temperatures
+- FPS values are also a *Game* device in the sensor list, so normal overlays, History graphs, alerts (*FPS below 30*) and CSV logging work with them.
+- **Game sessions** (History): a summary of every game you played – average FPS, lows, stutters, what limited it, hottest CPU / GPU.
+- **Benchmark**: `Ctrl+Alt+F9` records a run and saves its summary plus every frame as CSV.
+- Windowed games can be marked under *Settings → Gaming*. Overlays can't draw over true exclusive fullscreen; borderless and most modern games work.
 
 **PC tools**
 - **Disk analyzer** – WizTree-style folder tree, file-type breakdown, largest files and a labelled, zoomable treemap. Right-click → open, show in Explorer, move to Recycle Bin.
@@ -61,6 +73,8 @@
 3. Start `Kelvra.exe`. It asks for administrator rights – that's required to read CPU temperatures, voltages and fan speeds.
 4. On first start Kelvra offers to install **PawnIO**, the small signed driver it needs for CPU sensors. You can also do this later under *Settings → Sensor driver*.
 
+**Updates:** Kelvra checks GitHub once a day for a new release and asks before installing it. If you click *Not now*, it asks again a day later. *Install and restart* downloads the new `Kelvra.exe`, checks it against the release's SHA-256 and replaces the old one in place, so your settings stay. You can check by hand, or turn the automatic check off, under *Settings → About*.
+
 > **Windows SmartScreen / antivirus warnings:** Kelvra is not code-signed yet, runs as administrator and can install a driver, so some scanners are cautious. The full source is in this repository and every release is built by GitHub Actions from it – compare the SHA-256 of your download with the one on the release page.
 
 **Requirements:** Windows 10 or 11, 64-bit.
@@ -74,7 +88,7 @@ dotnet publish Kelvra.csproj -c Release -p:PublishSingleFile=true -p:IncludeNati
 ```
 
 - Needs the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
-- The build downloads the official PawnIO installer once (hash-checked) and embeds it – see `Kelvra.csproj`.
+- The build downloads the official PawnIO installer and PresentMon once (hash-checked) and embeds them – see `Kelvra.csproj`.
 - Releases: push a tag like `v1.0.0` and the [Build workflow](.github/workflows/build.yml) creates a GitHub Release with `Kelvra.exe` and its checksum.
 - Tests: `dotnet test tests/Kelvra.Tests` (also run by the Build workflow).
 
@@ -91,7 +105,7 @@ tests/       xUnit tests (logic, disk tools, safety and security checks)
 ```
 
 Settings are stored in `%APPDATA%\Kelvra\settings.json` (saved history in `history.bin` next to it, a small error log in `logs\`); CSV logs go to `Documents\Kelvra Logs`.
-Kelvra has no telemetry and makes no network connections of its own. *Settings → About → Copy diagnostics* puts versions, detected hardware and the end of the log on your clipboard for a bug report (your user name is removed); nothing is sent anywhere.
+Kelvra has no telemetry. Its only network connection is the daily update check: it asks GitHub for the latest release, and nothing about your PC is sent. You can turn it off under *Settings → About*. *Settings → About → Copy diagnostics* puts versions, detected hardware and the end of the log on your clipboard for a bug report (your user name is removed); nothing is sent anywhere.
 
 ## Uninstall
 
@@ -101,7 +115,7 @@ Kelvra has no telemetry and makes no network connections of its own. *Settings �
 
 ## Credits
 
-Sensor data comes from **[LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)**, CPU access uses the **[PawnIO](https://pawnio.eu)** driver by namazso. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+Sensor data comes from **[LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)**, CPU access uses the **[PawnIO](https://pawnio.eu)** driver by namazso, and FPS / frame times come from Intel's **[PresentMon](https://github.com/GameTechDev/PresentMon)**. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## License
 

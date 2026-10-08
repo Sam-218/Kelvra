@@ -7,3 +7,4 @@ publish-new/
 
 # Downloaded at build time (see Kelvra.csproj)
 Assets/PawnIO/
+Assets/PresentMon/

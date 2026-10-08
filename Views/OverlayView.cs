@@ -21,7 +21,7 @@ public sealed class OverlayView : Border
     private Brush _valueBrush = Brushes.White, _warmBrush = Brushes.Yellow, _hotBrush = Brushes.Red, _accent = Brushes.Orange;
 
     private sealed record Cell(OverlayItem Item, TextBlock? Label, TextBlock Value, ColumnDefinition? BarFill, ColumnDefinition? BarRest,
-                               Border? BarFront, TrendChart? Graph);
+                               Border? BarFront, TrendChart? Graph, FrameTimeChart? Frames = null);
 
     public OverlayView(OverlayProfile profile, SensorStore store, bool preview)
     {
@@ -134,6 +134,16 @@ public sealed class OverlayView : Border
         VerticalAlignment = VerticalAlignment.Center,
     };
 
+    /// <summary>The live frametime graph of the gaming overlay (one per item; its value text is never shown).</summary>
+    private FrameTimeChart FramesChart(OverlayItem item, Brush labelBrush, double width, double height)
+    {
+        var chart = new FrameTimeChart(_preview) { Width = width, Height = height, VerticalAlignment = VerticalAlignment.Center };
+        chart.SetColors(item.ValueColor is { } c ? BrushOf(c, Colors.White) : _valueBrush, _hotBrush, labelBrush);
+        return chart;
+    }
+
+    private static bool IsFramesChart(OverlayItem item) => item.SensorId == GameOverlay.FrameTimesId;
+
     private UIElement BuildVertical(Brush labelBrush)
     {
         var grid = new Grid();
@@ -156,6 +166,25 @@ public sealed class OverlayView : Border
                     Margin = new Thickness(0, lastGroup == null ? 0 : 6 + _p.RowSpacing, 0, 1),
                 }, span: true);
                 lastGroup = group;
+            }
+
+            if (IsFramesChart(item))
+            {
+                // Full width under its label: a frametime graph needs room to show single spikes
+                TextBlock? chartLabel = null;
+                if (!item.HideLabel)
+                {
+                    chartLabel = Label(labelBrush, _p.FontSize);
+                    chartLabel.Margin = new Thickness(0, _p.RowSpacing / 2.0 + 2, 0, 1);
+                    AddRow(grid, chartLabel, span: true);
+                }
+                var chart = FramesChart(item, labelBrush, double.NaN, Math.Max(28, _p.FontSize * 3.2));
+                chart.HorizontalAlignment = HorizontalAlignment.Stretch;
+                chart.MinWidth = _p.FontSize * 14;
+                chart.Margin = new Thickness(0, 0, 0, _p.RowSpacing / 2.0 + 3);
+                AddRow(grid, chart, span: true);
+                _cells.Add(new Cell(item, chartLabel, new TextBlock(), null, null, null, null, chart));
+                continue;
             }
 
             var value = Value(valueSize);
@@ -231,6 +260,15 @@ public sealed class OverlayView : Border
                 label.Margin = new Thickness(0, 0, 6, 0);
                 cell.Children.Add(label);
             }
+
+            if (IsFramesChart(item))
+            {
+                var chart = FramesChart(item, labelBrush, Math.Max(120, _p.FontSize * 11), Math.Max(16, valueSize * 1.6));
+                cell.Children.Add(chart);
+                row.Children.Add(cell);
+                _cells.Add(new Cell(item, label, new TextBlock(), null, null, null, null, chart));
+                continue;
+            }
             var value = Value(valueSize);
             value.MinWidth = valueSize * 3.4;
 
@@ -284,6 +322,19 @@ public sealed class OverlayView : Border
             {
                 label = Label(labelBrush, Math.Max(8, _p.FontSize * 0.85));
                 tile.Children.Add(label);
+            }
+
+            if (IsFramesChart(item))
+            {
+                var chart = FramesChart(item, labelBrush, double.NaN, Math.Max(24, valueSize * 1.4));
+                chart.HorizontalAlignment = HorizontalAlignment.Stretch;
+                chart.Margin = new Thickness(0, 2, 0, 0);
+                tile.Children.Add(chart);
+                Grid.SetRow(tile, r);
+                Grid.SetColumn(tile, c);
+                grid.Children.Add(tile);
+                _cells.Add(new Cell(item, label, new TextBlock(), null, null, null, null, chart));
+                continue;
             }
             var value = Value(valueSize);
             tile.Children.Add(value);
@@ -363,25 +414,61 @@ public sealed class OverlayView : Border
 
     // ---------- live values ----------
 
-    public void UpdateValues()
+    /// <summary>The overlay shows any Game sensor or game extra (those refresh 4× a second while a game runs).</summary>
+    public bool HasGameItems => _cells.Any(c => IsGameItem(c.Item.SensorId));
+
+    private static bool IsGameItem(string id) => GameSensors.IsGameSensor(id) || GameOverlay.IsExtra(id);
+
+    /// <param name="gameOnly">Only the game numbers (the fast refresh between sensor polls).</param>
+    public void UpdateValues(bool gameOnly = false)
     {
+        // Game numbers straight from the frame statistics (fresher than the once-a-second sensor poll),
+        // or sample ones in the editor preview while no game runs
+        var monitor = App.Current.Game;
+        var game = monitor.ActiveGame;
+        bool demo = game == null && _preview;
+        FrameSnapshot? snapshot = null;
+        Dictionary<string, SensorReading>? gameSensors = null;
+
         foreach (var cell in _cells)
         {
-            _store.ById.TryGetValue(cell.Item.SensorId, out var s);
-            string? extra = OverlayExtras.NameOf(cell.Item.SensorId);
+            string id = cell.Item.SensorId;
+            bool gameItem = IsGameItem(id);
+            if (gameOnly && !gameItem) continue;
+            _store.ById.TryGetValue(id, out var s);
+            string? extra = OverlayExtras.NameOf(id);
 
             if (cell.Label != null)
             {
                 string label = cell.Item.Label ?? s?.OverlayLabel ?? extra ?? (_store.Loaded ? "?" : "…");
                 if (cell.Label.Text != label) cell.Label.Text = label;
             }
+            if (cell.Frames != null) continue; // draws itself
 
-            string value = extra != null ? OverlayExtras.Text(cell.Item.SensorId, _p.ClockSeconds)
-                : s == null ? "-" : OverlayFormat.Value(s.Type, s.Value, cell.Item.Decimals, _p.ShowUnits);
+            if (gameItem) snapshot ??= game != null ? monitor.Current() : demo ? GameOverlay.Demo : FrameSnapshot.Empty;
+
+            // Type and raw value: the sensor's; Game sensors from the live snapshot
+            var type = s?.Type;
+            float? raw = s?.Value;
+            if (GameSensors.IsGameSensor(id))
+            {
+                gameSensors ??= GameSensors.Readings(snapshot!, gameActive: game != null || demo).ToDictionary(r => r.Id);
+                if (gameSensors.TryGetValue(id, out var r)) (type, raw) = (r.Type, r.Value);
+            }
+
+            string value;
+            if (GameOverlay.IsExtra(id))
+            {
+                string? name = game == null ? (demo ? "Your game" : null)
+                    : monitor.Benchmark != null ? $"{game.Name} · ● REC" : game.Name;
+                value = GameOverlay.Text(id, snapshot!, name);
+            }
+            else value = extra != null ? OverlayExtras.Text(id, _p.ClockSeconds)
+                : type is { } t ? OverlayFormat.Value(t, raw, cell.Item.Decimals, _p.ShowUnits) : "-";
             if (cell.Value.Text != value) cell.Value.Text = value;
 
             var own = cell.Item.ValueColor is { } c ? BrushOf(c, Colors.White) : _valueBrush;
-            int level = !_p.WarnColors || s == null ? 0 : OverlayFormat.Level(s.Value, _p.Limits(cell.Item, s.Type));
+            int level = !_p.WarnColors || type is not { } st ? 0 : OverlayFormat.Level(raw, _p.Limits(cell.Item, st));
             var brush = level switch { 2 => _hotBrush, 1 => _warmBrush, _ => own };
             if (!ReferenceEquals(cell.Value.Foreground, brush)) cell.Value.Foreground = brush;
 

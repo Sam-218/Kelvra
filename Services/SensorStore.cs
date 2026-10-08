@@ -79,6 +79,9 @@ public sealed class SensorStore : IDisposable
         _hardware.ReleaseFans();
     }
 
+    /// <summary>Sensors that don't come from the hardware (the "Game" device), added to every poll on the UI thread.</summary>
+    public Func<IEnumerable<SensorReading>?>? ExtraReadings { get; set; }
+
     /// <summary>Longest wait between retries while polling keeps failing.</summary>
     internal static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(30);
 
@@ -102,6 +105,7 @@ public sealed class SensorStore : IDisposable
                     opened = true;
                 }
                 var readings = await Task.Run(_poll, ct);
+                if (ExtraReadings?.Invoke() is { } extra) readings.AddRange(extra);
                 Apply(readings);
                 Error = null;
                 failures = 0;
@@ -166,7 +170,8 @@ public sealed class SensorStore : IDisposable
         }
 
         // AIDA-style order: hardware first, then sensor type
-        foreach (var r in fresh.OrderBy(r => _hardwareOrder[r.HardwareId]).ThenBy(r => TypeOrder(r.Type)))
+        // The Game device keeps its own order (FPS first); OrderBy is stable
+        foreach (var r in fresh.OrderBy(r => _hardwareOrder[r.HardwareId]).ThenBy(r => r.HardwareType == GameSensors.Hardware ? 0 : TypeOrder(r.Type)))
         {
             var vm = new SensorVm(r, _groupNames[r.HardwareId])
             {

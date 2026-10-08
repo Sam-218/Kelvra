@@ -84,6 +84,7 @@ public partial class OverlaysPage : UserControl
         NoOverlaySelected.Visibility = _selected == null ? Visibility.Visible : Visibility.Collapsed;
         BuildPreview();
         UpdateNoItems();
+        UpdateGameModules();
         UpdateLockButton();
         UpdateAnchorGrid();
     }
@@ -94,7 +95,11 @@ public partial class OverlaysPage : UserControl
         {
             case nameof(OverlayProfile.Items):
                 UpdateNoItems();
+                UpdateGameModules();
                 _preview?.Rebuild(unlocked: false);
+                break;
+            case nameof(OverlayProfile.ShowOnlyInGames):
+                UpdateGameModules();
                 break;
             case nameof(OverlayProfile.Locked):
                 UpdateLockButton();
@@ -163,7 +168,9 @@ public partial class OverlaysPage : UserControl
         _app.Overlays.Visible = true;
         OverlayList.SelectedItem = p;
         string lockHint = _app.Settings.HotkeyLock.Length > 0 ? $" ({_app.Settings.HotkeyLock})" : " with the padlock in the left bar";
-        Toast?.Invoke($"Created “{name}”. Drag it into place, then lock it{lockHint}");
+        Toast?.Invoke(p.ShowOnlyInGames
+            ? $"Created “{name}”. Place it now and lock it{lockHint}; then it appears by itself in games"
+            : $"Created “{name}”. Drag it into place, then lock it{lockHint}");
     }
 
     private string NextName(string baseName)
@@ -245,6 +252,56 @@ public partial class OverlaysPage : UserControl
         Toast?.Invoke(missing == 0
             ? $"Imported “{profile.Name}”. Drag it into place, then lock it"
             : $"Imported “{profile.Name}” · {missing} of {profile.Items.Count} sensors aren't on this PC (shown as “Sensor not found”)");
+    }
+
+    // ---------- gaming modules ----------
+
+    private bool _syncingModules;
+
+    private void BuildGameModules()
+    {
+        foreach (var module in GameOverlay.Modules)
+        {
+            var text = new StackPanel();
+            text.Children.Add(new TextBlock { Text = module.Name });
+            text.Children.Add(new TextBlock { Text = module.Description, Style = (Style)FindResource("Muted"), TextWrapping = TextWrapping.Wrap });
+            var box = new CheckBox { Style = (Style)FindResource("Switch"), Content = text, Tag = module, Width = 300, Margin = new Thickness(0, 0, 16, 8) };
+            AutomationProperties.SetName(box, module.Name);
+            box.Checked += GameModule_Changed;
+            box.Unchecked += GameModule_Changed;
+            GameModuleSwitches.Children.Add(box);
+        }
+    }
+
+    private void GameModule_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_syncingModules || _selected == null || sender is not CheckBox { Tag: GameOverlay.Module module } box) return;
+        bool on = box.IsChecked == true;
+        if (on && module.Key == "hardware" && GameOverlay.HardwareIds(_app.Sensors.All).Length == 0)
+        {
+            Toast?.Invoke("No CPU or GPU sensors were found yet");
+            UpdateGameModules();
+            return;
+        }
+        GameOverlay.Set(_selected, module, on, _app.Sensors.All);
+        foreach (var item in _selected.Items) _app.Overlays.Resolve(item);
+    }
+
+    /// <summary>Shows the module switches for gaming overlays, ticked for the modules the overlay has.</summary>
+    private void UpdateGameModules()
+    {
+        if (GameModuleSwitches.Children.Count == 0) BuildGameModules();
+        bool gaming = _selected is { ShowOnlyInGames: true };
+        GameModulesPanel.Visibility = gaming ? Visibility.Visible : Visibility.Collapsed;
+        if (!gaming) return;
+
+        _syncingModules = true;
+        foreach (CheckBox box in GameModuleSwitches.Children)
+            box.IsChecked = GameOverlay.IsOn(_selected!, (GameOverlay.Module)box.Tag, _app.Sensors.All);
+        _syncingModules = false;
+        GameModulesHint.Text = _app.Settings.GameFpsEnabled
+            ? "Turn on what you want to see. The preview shows sample numbers until a game runs."
+            : "FPS measuring is off (Settings → Gaming), so the frame numbers stay empty. Hardware rows still work.";
     }
 
     // ---------- sensors tab ----------

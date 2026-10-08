@@ -186,6 +186,10 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="10" />
                                     <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="10" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="10" />
+                                    <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
                                 <TextBlock Text="Show / hide overlays" Style="{StaticResource FieldLabel}" />
                                 <local:HotkeyBox x:Name="HotkeyOverlaysBox" Grid.Column="1" AutomationProperties.Name="Shortcut to show or hide overlays" />
@@ -194,6 +198,14 @@
                                 <TextBlock Grid.Row="2" Text="Lock / unlock overlays" Style="{StaticResource FieldLabel}" />
                                 <local:HotkeyBox x:Name="HotkeyLockBox" Grid.Row="2" Grid.Column="1" AutomationProperties.Name="Shortcut to lock or unlock overlays" />
                                 <TextBlock x:Name="HotkeyLockNote" Grid.Row="2" Grid.Column="2" Style="{StaticResource Muted}" Margin="12,0,0,0"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Grid.Row="4" Text="Show / hide gaming overlay" Style="{StaticResource FieldLabel}" />
+                                <local:HotkeyBox x:Name="HotkeyGameOverlaysBox" Grid.Row="4" Grid.Column="1" AutomationProperties.Name="Shortcut to show or hide the gaming overlay" />
+                                <TextBlock x:Name="HotkeyGameOverlaysNote" Grid.Row="4" Grid.Column="2" Style="{StaticResource Muted}" Margin="12,0,0,0"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Grid.Row="6" Text="Start / stop benchmark" Style="{StaticResource FieldLabel}" />
+                                <local:HotkeyBox x:Name="HotkeyBenchmarkBox" Grid.Row="6" Grid.Column="1" AutomationProperties.Name="Shortcut to start or stop a benchmark" />
+                                <TextBlock x:Name="HotkeyBenchmarkNote" Grid.Row="6" Grid.Column="2" Style="{StaticResource Muted}" Margin="12,0,0,0"
                                            VerticalAlignment="Center" />
                             </Grid>
                         </StackPanel>
@@ -214,6 +226,42 @@
                                 <Button x:Name="SettingsInstallButton" Grid.Column="1" Content="Install" Style="{StaticResource AccentButton}"
                                         VerticalAlignment="Center" Click="InstallPawnIo_Click" />
                             </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="Gaming" Style="{StaticResource H2}" />
+                            <CheckBox x:Name="GameFpsSwitch" Style="{StaticResource Switch}" Checked="GameFps_Changed" Unchecked="GameFps_Changed">
+                                <StackPanel>
+                                    <TextBlock Text="Measure FPS in games" />
+                                    <TextBlock Text="Uses Intel PresentMon to read frame times. Powers the gaming overlay, the Game sensors and game sessions."
+                                               Style="{StaticResource Muted}" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </CheckBox>
+                            <TextBlock x:Name="GameFpsStatus" Style="{StaticResource Muted}" Margin="0,2,0,12" TextWrapping="Wrap" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="200" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="8" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="Always a game" Style="{StaticResource FieldLabel}"
+                                           ToolTip="For games Kelvra doesn&apos;t find by itself (e.g. windowed games outside a store library)" />
+                                <TextBox x:Name="GameAlwaysBox" Grid.Column="1" Tag="e.g. Dying Light 2, War Thunder" LostFocus="GameLists_LostFocus"
+                                         AutomationProperties.Name="Programs that always count as games" />
+                                <TextBlock Grid.Row="2" Text="Never a game" Style="{StaticResource FieldLabel}"
+                                           ToolTip="Programs that draw a lot but aren't games (3D tools, video players …)" />
+                                <TextBox x:Name="GameNeverBox" Grid.Row="2" Grid.Column="1" Tag="e.g. blender" LostFocus="GameLists_LostFocus"
+                                         AutomationProperties.Name="Programs that never count as games" />
+                            </Grid>
+                            <TextBlock x:Name="GameSeenText" Style="{StaticResource Muted}" Margin="0,8,0,0" TextWrapping="Wrap" />
+                            <TextBlock Style="{StaticResource Muted}" Margin="0,8,0,0" TextWrapping="Wrap"
+                                       Text="Game names, install folder names or exe names, separated by commas. Games from Steam, Epic, GOG, Xbox, EA and Ubisoft libraries are found by themselves, also windowed. Overlays can't draw over true exclusive fullscreen; borderless and most modern DirectX 12 / Vulkan games work." />
                         </StackPanel>
                     </Border>
 
@@ -240,7 +288,21 @@
                         <StackPanel>
                             <TextBlock Text="About" Style="{StaticResource H2}" />
                             <TextBlock x:Name="AboutText" Style="{StaticResource Muted}" FontSize="13" LineHeight="20" />
+                            <CheckBox x:Name="CheckUpdatesSwitch" Style="{StaticResource Switch}" Margin="0,12,0,0"
+                                      Checked="CheckUpdates_Changed" Unchecked="CheckUpdates_Changed">
+                                <StackPanel>
+                                    <TextBlock Text="Check for updates automatically" />
+                                    <TextBlock Text="Asks GitHub once a day whether a newer Kelvra exists. Nothing about your PC is sent."
+                                               Style="{StaticResource Muted}" />
+                                </StackPanel>
+                            </CheckBox>
                             <WrapPanel Margin="0,12,0,0">
+                                <Button x:Name="CheckUpdatesButton" Margin="0,0,8,0" Click="CheckForUpdates_Click">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE895;" Style="{StaticResource Icon}" FontSize="12" Margin="0,0,8,0" />
+                                        <TextBlock x:Name="CheckUpdatesButtonText" Text="Check for updates" />
+                                    </StackPanel>
+                                </Button>
                                 <Button Margin="0,0,8,0" Click="CopyDiagnostics_Click"
                                         ToolTip="Versions, detected hardware and the end of the log, for a bug report. Your user name is removed; nothing is sent anywhere.">
                                     <StackPanel Orientation="Horizontal">

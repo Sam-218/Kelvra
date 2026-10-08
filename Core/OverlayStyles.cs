@@ -98,10 +98,11 @@ public static class OverlayFormat
         return space > 0 ? text[..space] : text;
     }
 
-    /// <summary>0 = normal, 1 = warm, 2 = hot, from raw value and limits.</summary>
-    public static int Level(float? raw, (float Warm, float Hot)? limits)
+    /// <summary>0 = normal, 1 = warm, 2 = hot, from raw value and limits (for FPS, at or below the limits).</summary>
+    public static int Level(float? raw, (float Warm, float Hot, bool LowIsBad)? limits)
     {
         if (raw is not float v || float.IsNaN(v) || limits is not { } l) return 0;
+        if (l.LowIsBad) return v <= l.Hot ? 2 : v <= l.Warm ? 1 : 0;
         return v >= l.Hot ? 2 : v >= l.Warm ? 1 : 0;
     }
 }
