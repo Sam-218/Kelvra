@@ -1,4 +1,4 @@
-using System.ComponentModel;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
@@ -9,25 +9,27 @@ using System.Windows.Threading;
 
 namespace Kelvra;
 
-/// <summary>Processes (live CPU / memory / disk, end task) and startup apps (enable / disable).</summary>
+/// <summary>
+/// Processes grouped by app like Task Manager (live CPU / memory / disk, end task) and startup apps (enable / disable).
+/// </summary>
 public partial class AppsPage : UserControl
 {
-    private static readonly string[] NumericKeys = { nameof(ProcessRow.Cpu), nameof(ProcessRow.Memory), nameof(ProcessRow.Disk), nameof(ProcessRow.Pid) };
+    private static readonly string[] NumericKeys = { nameof(UsageRow.Cpu), nameof(UsageRow.Memory), nameof(UsageRow.Disk) };
 
     private readonly ProcessMonitor _monitor = new();
-    private readonly ListCollectionView _processView;
-    // Only runs while the Processes tab is on screen: sampling every process isn't free
-    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(2) };
+    // What the list shows, in order: kept in step with Move/Insert/Remove so selection and scrolling survive refreshes
+    private readonly ObservableCollection<UsageRow> _items = new();
+    // Once a second, like Task Manager; only while the Processes tab is on screen
+    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private ListCollectionView? _startupView;
-    private string _sortKey = nameof(ProcessRow.Cpu);
+    private string _sortKey = nameof(UsageRow.Cpu);
     private bool _sortDescending = true;
     private bool _refreshing;
 
     public AppsPage()
     {
         InitializeComponent();
-        _processView = new ListCollectionView(_monitor.Rows) { Filter = MatchesProcess };
-        ProcessList.ItemsSource = _processView;
+        ProcessList.ItemsSource = _items;
         ApplySort();
         StartupItem.ChangeFailed += (item, error) =>
             MessageBox.Show(Window.GetWindow(this), $"Couldn't change “{item.Name}”:\n{error}", "Kelvra", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -63,7 +65,7 @@ public partial class AppsPage : UserControl
 
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        _processView?.Refresh();
+        Rebuild();
         _startupView?.Refresh();
     }
 
@@ -78,8 +80,12 @@ public partial class AppsPage : UserControl
         try
         {
             await _monitor.RefreshAsync();
-            Subtitle.Text = $"{_monitor.Rows.Count} processes  ·  CPU {_monitor.TotalCpu:0} %  ·  " +
-                            $"{ByteFormat.Format(_monitor.TotalMemory)} memory in use by processes";
+            Rebuild();
+            string memory = _monitor.MemoryTotal > 0
+                ? $"  ·  Memory {ByteFormat.Format(_monitor.MemoryUsed)} of {ByteFormat.Format(_monitor.MemoryTotal)} " +
+                  $"({100.0 * _monitor.MemoryUsed / _monitor.MemoryTotal:0} %)"
+                : "";
+            Subtitle.Text = $"{_monitor.Apps.Count} apps · {_monitor.ProcessCount} processes  ·  CPU {_monitor.TotalCpu:0} %{memory}";
         }
         finally
         {
@@ -87,95 +93,216 @@ public partial class AppsPage : UserControl
         }
     }
 
-    private bool MatchesProcess(object o)
+    private bool Matches(UsageRow r)
     {
-        var p = (ProcessRow)o;
         string q = Query;
         return q.Length == 0
-               || p.Name.Contains(q, StringComparison.OrdinalIgnoreCase)
-               || p.Description.Contains(q, StringComparison.OrdinalIgnoreCase)
-               || p.Pid.ToString() == q;
+               || r.DisplayName.Contains(q, StringComparison.OrdinalIgnoreCase)
+               || r.ImageName.Contains(q, StringComparison.OrdinalIgnoreCase)
+               || (r is ProcessRow p && p.Pid.ToString() == q);
+    }
+
+    /// <summary>
+    /// Sorts and filters the apps, puts the processes of expanded apps right under them, and brings the list in line.
+    /// While searching, an app whose own name doesn't match shows just the processes that do.
+    /// </summary>
+    private void Rebuild()
+    {
+        bool searching = Query.Length > 0;
+        var wanted = new List<UsageRow>(_items.Count + 16);
+        foreach (var app in _monitor.Apps.OrderBy(a => a, Comparer<UsageRow>.Create(Compare)))
+        {
+            if (app is not AppGroup group)
+            {
+                if (Matches(app)) wanted.Add(app);
+                continue;
+            }
+            bool self = Matches(group);
+            var members = group.Members.Where(m => !searching || self || Matches(m)).ToList();
+            if (!self && members.Count == 0) continue;
+            wanted.Add(group);
+            if (group.IsExpanded || (searching && !self))
+            {
+                members.Sort(Compare);
+                wanted.AddRange(members);
+            }
+        }
+        Sync(_items, wanted);
+    }
+
+    /// <summary>Moves, inserts and removes rows so <paramref name="items"/> equals <paramref name="wanted"/>.</summary>
+    internal static void Sync<T>(ObservableCollection<T> items, IReadOnlyList<T> wanted) where T : class
+    {
+        var keep = new HashSet<T>(wanted, ReferenceEqualityComparer.Instance);
+        for (int i = items.Count - 1; i >= 0; i--)
+            if (!keep.Contains(items[i])) items.RemoveAt(i);
+        for (int i = 0; i < wanted.Count; i++)
+        {
+            if (i < items.Count && ReferenceEquals(items[i], wanted[i])) continue;
+            int at = -1;
+            for (int j = i + 1; j < items.Count; j++)
+            {
+                if (!ReferenceEquals(items[j], wanted[i])) continue;
+                at = j;
+                break;
+            }
+            if (at >= 0) items.Move(at, i);
+            else items.Insert(i, wanted[i]);
+        }
+    }
+
+    /// <summary>The chosen column; equal values (as shown, so 0.0 % and 0.04 % tie) keep a fixed order instead of swapping every second.</summary>
+    private int Compare(UsageRow a, UsageRow b)
+    {
+        int c = _sortKey switch
+        {
+            nameof(UsageRow.Cpu) => Math.Round(a.Cpu, 1).CompareTo(Math.Round(b.Cpu, 1)),
+            nameof(UsageRow.Memory) => a.Memory.CompareTo(b.Memory),
+            nameof(UsageRow.Disk) => Math.Round(a.Disk / 104_857.6).CompareTo(Math.Round(b.Disk / 104_857.6)), // 0.1 MB/s steps
+            nameof(UsageRow.Pid) => a.Pid.CompareTo(b.Pid),
+            _ => string.Compare(a.DisplayName, b.DisplayName, StringComparison.CurrentCultureIgnoreCase),
+        };
+        if (_sortDescending) c = -c;
+        if (c != 0) return c;
+        c = string.Compare(a.DisplayName, b.DisplayName, StringComparison.CurrentCultureIgnoreCase);
+        return c != 0 ? c : a.Pid.CompareTo(b.Pid);
     }
 
     private void Sort_Click(object sender, RoutedEventArgs e)
     {
         string key = (string)((Button)sender).Tag;
-        bool numeric = NumericKeys.Contains(key) && key != nameof(ProcessRow.Pid);
         if (_sortKey == key) _sortDescending = !_sortDescending;
         else
         {
             _sortKey = key;
-            _sortDescending = numeric;
+            _sortDescending = NumericKeys.Contains(key);
         }
         ApplySort();
     }
 
     private void ApplySort()
     {
-        using (_processView.DeferRefresh())
-        {
-            _processView.SortDescriptions.Clear();
-            _processView.SortDescriptions.Add(new SortDescription(_sortKey,
-                _sortDescending ? ListSortDirection.Descending : ListSortDirection.Ascending));
-            _processView.LiveSortingProperties.Clear();
-            _processView.LiveSortingProperties.Add(_sortKey);
-            _processView.IsLiveSorting = true;
-        }
-
+        Rebuild();
         string Arrow(string key) => _sortKey == key ? (_sortDescending ? "  ▼" : "  ▲") : "";
-        SortName.Content = "NAME" + Arrow(nameof(ProcessRow.DisplayName));
-        SortPid.Content = "PID" + Arrow(nameof(ProcessRow.Pid));
-        SortCpu.Content = "CPU" + Arrow(nameof(ProcessRow.Cpu));
-        SortMemory.Content = "MEMORY" + Arrow(nameof(ProcessRow.Memory));
-        SortDisk.Content = "DISK" + Arrow(nameof(ProcessRow.Disk));
+        SortName.Content = "NAME" + Arrow(nameof(UsageRow.DisplayName));
+        SortPid.Content = "PID" + Arrow(nameof(UsageRow.Pid));
+        SortCpu.Content = "CPU" + Arrow(nameof(UsageRow.Cpu));
+        SortMemory.Content = "MEMORY" + Arrow(nameof(UsageRow.Memory));
+        SortDisk.Content = "DISK" + Arrow(nameof(UsageRow.Disk));
+    }
+
+    private void SetExpanded(AppGroup group, bool expanded)
+    {
+        if (group.IsExpanded == expanded) return;
+        group.IsExpanded = expanded;
+        Rebuild();
+    }
+
+    private void Expand_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not AppGroup group) return;
+        SetExpanded(group, !group.IsExpanded);
+        ProcessList.SelectedItem = group;
+    }
+
+    private void ProcessList_DoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if ((e.OriginalSource as FrameworkElement)?.DataContext is AppGroup group) SetExpanded(group, !group.IsExpanded);
     }
 
     private void ProcessList_RightClick(object sender, MouseButtonEventArgs e)
     {
-        if ((e.OriginalSource as FrameworkElement)?.DataContext is not ProcessRow row) return;
+        if ((e.OriginalSource as FrameworkElement)?.DataContext is not UsageRow row) return;
         ProcessList.SelectedItem = row;
         var menu = new ContextMenu { PlacementTarget = ProcessList, Placement = PlacementMode.MousePoint };
-        menu.Items.Add(Item("End task", "", () => EndTask(row)));
+        if (row is AppGroup group)
+        {
+            menu.Items.Add(group.IsExpanded
+                ? Item("Hide its processes", "", () => SetExpanded(group, false))
+                : Item($"Show its {group.Count} processes", "", () => SetExpanded(group, true)));
+            menu.Items.Add(new Separator());
+        }
+        menu.Items.Add(Item(row is AppGroup ? "End task (all its processes)" : "End task", "", () => EndTask(row)));
         var open = Item("Open file location", "", () => ShowInExplorer(row.Path));
         open.IsEnabled = row.Path != null;
         menu.Items.Add(open);
-        menu.Items.Add(Item("Copy path", "", () => Clipboard.SetText(row.Path ?? row.Name)));
+        menu.Items.Add(Item("Copy path", "", () => Clipboard.SetText(row.Path ?? row.ImageName)));
         menu.Items.Add(new Separator());
         menu.Items.Add(Item("Search online", "", () => Start(new ProcessStartInfo(
-            $"https://www.bing.com/search?q={Uri.EscapeDataString(row.Name + ".exe")}") { UseShellExecute = true })));
+            $"https://www.bing.com/search?q={Uri.EscapeDataString(row.ImageName)}") { UseShellExecute = true })));
         menu.IsOpen = true;
         e.Handled = true;
     }
 
     private void ProcessList_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Delete && ProcessList.SelectedItem is ProcessRow row) EndTask(row);
+        switch (e.Key, ProcessList.SelectedItem)
+        {
+            case (Key.Delete, UsageRow row):
+                EndTask(row);
+                break;
+            case (Key.Right, AppGroup group):
+                SetExpanded(group, true);
+                break;
+            case (Key.Left, AppGroup group):
+                SetExpanded(group, false);
+                break;
+            case (Key.Left, ProcessRow { IsChild: true } child):
+                // Back up to the app the process belongs to
+                ProcessList.SelectedItem = _items.OfType<AppGroup>().FirstOrDefault(g => g.Members.Contains(child));
+                break;
+            case (Key.Enter, AppGroup group):
+                SetExpanded(group, !group.IsExpanded);
+                break;
+            default:
+                return;
+        }
+        e.Handled = true;
     }
 
-    private void EndTask(ProcessRow row)
+    /// <summary>Ends one process, or every process of an app (only the app's own ones, not other apps it started).</summary>
+    private void EndTask(UsageRow row)
     {
-        if (ProcessGuard.IsCritical(row.Pid, row.Name, row.Path))
+        var targets = row is AppGroup g ? g.Members.ToList() : new List<ProcessRow> { (ProcessRow)row };
+        var critical = targets.FirstOrDefault(p => ProcessGuard.IsCritical(p.Pid, p.Name, p.Path));
+        if (critical != null)
         {
             MessageBox.Show(Window.GetWindow(this),
-                $"“{row.DisplayName}” ({row.Name}, PID {row.Pid}) is a critical Windows process. Ending it would crash Windows " +
-                "(blue screen) or sign everyone out, so Kelvra won't do it.",
+                $"“{critical.DisplayName}” ({critical.ImageName}, PID {critical.Pid}) is a critical Windows process. Ending it would crash " +
+                "Windows (blue screen) or sign everyone out, so Kelvra won't do it.",
                 "End task", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
-        var answer = MessageBox.Show(Window.GetWindow(this),
-            $"End “{row.DisplayName}” ({row.Name}.exe, PID {row.Pid})?\n\nUnsaved work in that app will be lost.",
+        string what = row is AppGroup group
+            ? $"“{group.DisplayName}” and all {group.Count} of its processes"
+            : $"“{row.DisplayName}” ({row.ImageName}, PID {row.Pid})";
+        var answer = MessageBox.Show(Window.GetWindow(this), $"End {what}?\n\nUnsaved work in that app will be lost.",
             "End task", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
         if (answer != MessageBoxResult.Yes) return;
-        try
+
+        var failed = new List<string>();
+        // The app's own process first, so it can't restart the helpers that are ended after it
+        foreach (var p in targets.OrderBy(p => row is AppGroup a && ReferenceEquals(p, a.Root) ? 0 : 1))
         {
-            using var p = Process.GetProcessById(row.Pid);
-            p.Kill();
+            try
+            {
+                using var process = Process.GetProcessById(p.Pid);
+                // That PID belongs to a newer process now
+                if (Math.Abs(process.StartTime.ToFileTimeUtc() - p.Created) > TimeSpan.TicksPerSecond) continue;
+                process.Kill();
+            }
+            catch (ArgumentException)
+            {
+                // already gone
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+            {
+                failed.Add($"{p.ImageName} (PID {p.Pid}): {ex.Message}");
+            }
         }
-        catch (Exception ex)
-        {
-            MessageBox.Show(Window.GetWindow(this), $"Couldn't end {row.Name}:\n{ex.Message}", "Kelvra",
+        if (failed.Count > 0)
+            MessageBox.Show(Window.GetWindow(this), "Couldn't end:\n" + string.Join("\n", failed.Take(8)), "Kelvra",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
     }
 
     // ---------- startup apps ----------

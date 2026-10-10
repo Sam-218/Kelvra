@@ -2,8 +2,15 @@ using System.Globalization;
 
 namespace Kelvra;
 
-/// <summary>One presented frame, as PresentMon reports it. Times are in milliseconds; null = "NA" (not measured).</summary>
+/// <summary>
+/// One frame, as PresentMon reports it: a frame the game presented, or (with frame generation in the driver) a frame
+/// generated between two of them. Times are in milliseconds; null = "NA" (not measured).
+/// </summary>
 /// <param name="TimeMs">PresentMon's time column (ms since it started); only used to notice frames that arrive late.</param>
+/// <param name="FrameTimeMs">Present to present. A generated frame repeats the interval of the present it belongs to.</param>
+/// <param name="DisplayedMs">Screen update to screen update: how long the previous frame stayed on screen. Null if not shown.</param>
+/// <param name="FrameType">"Application", or who generated it ("AMD AFMF", "Intel XeSS-FG"); "" without the column.</param>
+/// <param name="PcLatencyMs">Input to screen as NVIDIA Reflex measures it, in games that report it.</param>
 public sealed record FrameSample(
     int ProcessId,
     ulong SwapChain,
@@ -13,16 +20,32 @@ public sealed record FrameSample(
     double FrameTimeMs,
     double? CpuBusyMs,
     double? GpuBusyMs,
-    double? UntilDisplayedMs)
+    double? UntilDisplayedMs,
+    double? DisplayedMs = null,
+    string FrameType = "",
+    double? PcLatencyMs = null)
 {
     /// <summary>Shown on screen (dropped frames have no display time).</summary>
     public bool Displayed => UntilDisplayedMs is not null;
 
     /// <summary>
-    /// How old the frame is when it reaches the screen: frame start → display (CPU time until Present + Present until
-    /// shown). Null for frames that weren't shown.
+    /// Made by frame generation in the driver (AMD Fluid Motion Frames, Intel XeSS-FG), not rendered by the game.
+    /// DLSS / FSR frame generation inside a game presents its frames like the game's own, so they aren't marked.
     /// </summary>
-    public double? LatencyMs => CpuBusyMs is double c && UntilDisplayedMs is double d ? c + d : null;
+    public bool Generated => FrameType.Length > 0 && FrameType is not ("Application" or "NotSet" or "Repeated");
+
+    /// <summary>
+    /// How old the frame is when it reaches the screen. NVIDIA Reflex's PC latency (input → screen) where the game
+    /// reports it; otherwise frame start → display (CPU time until Present + Present until shown). Null for frames that
+    /// weren't shown, and for generated ones without Reflex numbers (they have no CPU time of their own).
+    /// </summary>
+    public double? LatencyMs => PcLatency ?? EstimatedLatencyMs;
+
+    /// <summary>Reflex's PC latency of a shown frame, or null.</summary>
+    public double? PcLatency => Displayed && PcLatencyMs is double pcl && pcl > 0 ? pcl : null;
+
+    /// <summary>Frame start → display, worked out from PresentMon's CPU and display times.</summary>
+    public double? EstimatedLatencyMs => !Generated && CpuBusyMs is double c && UntilDisplayedMs is double d ? c + d : null;
 }
 
 /// <summary>
@@ -33,7 +56,8 @@ public sealed class PresentMonCsv
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    private readonly int _pid, _swap, _sync, _mode, _time, _frameTime, _cpuBusy, _gpuBusy, _untilDisplayed, _columns;
+    private readonly int _pid, _swap, _sync, _mode, _time, _frameTime, _cpuBusy, _gpuBusy, _untilDisplayed, _displayed, _frameType,
+                         _pcLatency, _columns;
 
     private PresentMonCsv(Dictionary<string, int> col, int columns)
     {
@@ -54,6 +78,9 @@ public sealed class PresentMonCsv
         _cpuBusy = Find("MsCPUBusy", "CPUBusy");
         _gpuBusy = Find("MsGPUBusy", "GPUBusy");
         _untilDisplayed = Find("MsUntilDisplayed");
+        _displayed = Find("MsBetweenDisplayChange", "DisplayedTime");
+        _frameType = Find("FrameType");
+        _pcLatency = Find("MsPCLatency", "PCLatency");
         _columns = columns;
     }
     /// <summary>The parser for this header line, or null if it isn't a PresentMon header.</summary>
@@ -79,7 +106,8 @@ public sealed class PresentMonCsv
         if (Num(f, _frameTime) is not double frameTime || frameTime <= 0 || frameTime > 60_000) return null;
 
         return new FrameSample(pid, Hex(f, _swap), (int)(Num(f, _sync) ?? 0), Str(f, _mode), Num(f, _time) ?? 0, frameTime,
-                               Num(f, _cpuBusy), Num(f, _gpuBusy), Num(f, _untilDisplayed));
+                               Num(f, _cpuBusy), Num(f, _gpuBusy), Num(f, _untilDisplayed),
+                               Num(f, _displayed) is double shown && shown > 0 ? shown : null, Str(f, _frameType), Num(f, _pcLatency));
     }
 
     private static string Str(string[] f, int i) => i < 0 ? "" : f[i].Trim();

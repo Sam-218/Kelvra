@@ -15,6 +15,7 @@ public static class GameOverlay
     public const string StuttersId = "extra:game:stutters";
     public const string BoundId = "extra:game:bound";
     public const string NameId = "extra:game:name";
+    public const string FrameGenId = "extra:game:framegen";
 
     /// <summary>"extra:game:" items (texts and the graph), with their default labels.</summary>
     public static readonly (string Id, string Name)[] Extras =
@@ -24,6 +25,7 @@ public static class GameOverlay
         (StuttersId, "Stutters"),
         (BoundId, "Bottleneck"),
         (NameId, "Game name"),
+        (FrameGenId, "Frame generation"),
     };
 
     public sealed record Module(string Key, string Name, string Description, string[] Ids);
@@ -38,7 +40,8 @@ public static class GameOverlay
         new("graph", "Frametime graph", "Every frame of the last 10 seconds; spikes are stutters.", new[] { FrameTimesId }),
         new("stutters", "Stutters", "Frames that took much longer than the ones around them.", new[] { StuttersId }),
         new("bound", "Bottleneck", "Whether the GPU or the CPU limits the frame rate, or a limiter / VSync caps it.", new[] { BoundId }),
-        new("latency", "Latency", "How old a frame is when it reaches the screen (from the start of the frame until it's shown).", new[] { GameSensors.LatencyId }),
+        new("latency", "Latency", "How old a frame is when it reaches the screen: from your input (games with NVIDIA Reflex) or from the start of the frame until it's shown.", new[] { GameSensors.LatencyId }),
+        new("framegen", "Frame generation", "Frames AMD Fluid Motion Frames or Intel XeSS-FG generate in the driver, and the FPS the game renders itself. DLSS and FSR frame generation inside a game count as normal frames, like on NVIDIA's and AMD's overlays.", new[] { FrameGenId }),
         new("name", "Game name", "Which game is being measured (shows ● REC while a benchmark records).", new[] { NameId }),
         new("session", "Play time", "How long this game has been running.", new[] { GameSensors.SessionId }),
         new("hardware", "CPU and GPU", "Load and temperature of the CPU and GPU, and VRAM.", Array.Empty<string>()),
@@ -114,6 +117,9 @@ public static class GameOverlay
                 Bottleneck.Capped => "Capped (limiter / VSync)",
                 _ => "-",
             },
+            FrameGenId => s.FrameGeneration is string by
+                ? s.RenderedFps is double rendered ? $"{by} · {F(rendered)} rendered" : by
+                : "-",
             _ => "-",
         };
     }
@@ -127,5 +133,6 @@ public static class GameOverlay
     public static readonly FrameSnapshot Demo = new(
         Fps: 142, FrameTimeMs: 7.0, Low1: 98, Low01: 71, AvgFps: 138, MinFps: 64, MaxFps: 165,
         Stutters: 3, SecondsSinceStutter: 42, GpuBusyPercent: 97, Bound: Bottleneck.GpuBound,
-        LatencyMs: 18.5, PresentMode: "Hardware: Independent Flip", SessionLength: TimeSpan.FromMinutes(47));
+        LatencyMs: 18.5, PresentMode: "Hardware: Independent Flip", SessionLength: TimeSpan.FromMinutes(47),
+        FrameGeneration: "AMD AFMF", RenderedFps: 71);
 }

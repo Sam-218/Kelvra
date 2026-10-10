@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Automation;
 using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using static Kelvra.NativeMethods;
@@ -45,7 +46,7 @@ public partial class MainWindow : Window
             NavSensors.IsChecked = true;
         };
 
-        BuildAccentSwatches();
+        SetupAccentPicker();
         LoadSettingsUi();
         UpdateOverlayControls();
         UpdatePawnIoUi();
@@ -305,28 +306,39 @@ public partial class MainWindow : Window
         _syncingUi = false;
     }
 
-    /// <summary>One round swatch per accent colour (Settings → Appearance).</summary>
-    private void BuildAccentSwatches()
+    /// <summary>
+    /// The accent colour (Settings → Appearance): any colour from the picker, with Kelvra's accents (and the Windows
+    /// accent colour) as quick picks. It applies live while you pick.
+    /// </summary>
+    private void SetupAccentPicker()
     {
-        foreach (var accent in Accents.All)
+        var presets = Accents.All.Select(a => (a.Bright, a.Name)).ToList();
+        if (WindowsAccent() is Color windows) presets.Insert(0, (windows, "Windows accent colour"));
+        AccentField.Presets = presets;
+        AccentField.Value = ColorMath.ToHex(Accents.ColorOf(_app.Settings.Accent));
+        AccentField.ValueChanged += hex =>
         {
-            var swatch = new RadioButton
-            {
-                Style = (Style)FindResource("Swatch"),
-                GroupName = "Accent",
-                Background = Accents.Frozen(accent.Bright),
-                ToolTip = accent.Name,
-                IsChecked = string.Equals(_app.Settings.Accent, accent.Name, StringComparison.OrdinalIgnoreCase),
-            };
-            AutomationProperties.SetName(swatch, accent.Name);
-            swatch.Checked += (_, _) =>
-            {
-                if (_app.Settings.Accent == accent.Name) return;
-                _app.Settings.Accent = accent.Name;
-                ThemeManager.ApplyAccent(accent.Name);
-                _app.MarkDirty();
-            };
-            AccentSwatches.Children.Add(swatch);
+            if (!ColorUtil.IsValidHex(hex)) return;
+            string setting = Accents.SettingFor(ColorUtil.Parse(hex, Accents.All[0].Bright));
+            if (string.Equals(setting, _app.Settings.Accent, StringComparison.OrdinalIgnoreCase)) return;
+            _app.Settings.Accent = setting;
+            ThemeManager.ApplyAccent(setting);
+            _app.MarkDirty();
+        };
+    }
+
+    /// <summary>The accent colour chosen in Windows' settings (null if it can't be read).</summary>
+    private static Color? WindowsAccent()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\DWM");
+            if (key?.GetValue("AccentColor") is not int abgr) return null;
+            return Color.FromRgb((byte)abgr, (byte)(abgr >> 8), (byte)(abgr >> 16)); // stored as 0xAABBGGRR
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+        {
+            return null;
         }
     }
 

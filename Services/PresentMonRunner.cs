@@ -98,14 +98,16 @@ public sealed class PresentMonRunner : IDisposable
     private void Run(RunState run)
     {
         int failures = 0;
+        bool tracking = true; // frame types and Reflex latency: PresentMon calls these options beta, so they're dropped if it chokes on them
         try
         {
             while (!run.Stopping)
             {
                 long started = Environment.TickCount64;
+                long frames = 0;
                 try
                 {
-                    RunOnce(run);
+                    frames = RunOnce(run, tracking);
                     if (!run.Stopping) Error = "PresentMon stopped unexpectedly; restarting.";
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
@@ -114,6 +116,11 @@ public sealed class PresentMonRunner : IDisposable
                     Log.Error("Running PresentMon", ex);
                 }
                 if (run.Stopping) return;
+                if (tracking && frames == 0 && Environment.TickCount64 - started < 15_000)
+                {
+                    tracking = false;
+                    Log.Warn("PresentMon ended at once with frame-type and Reflex latency tracking; trying without them");
+                }
 
                 // Ran for a while: a one-off hiccup. Otherwise wait longer each time (2 s … 60 s).
                 failures = Environment.TickCount64 - started > 60_000 ? 1 : failures + 1;
@@ -128,7 +135,8 @@ public sealed class PresentMonRunner : IDisposable
         }
     }
 
-    private void RunOnce(RunState run)
+    /// <returns>How many frames it delivered.</returns>
+    private long RunOnce(RunState run, bool tracking)
     {
         string exe = Extract(run);
         string self = Path.GetFileName(Environment.ProcessPath ?? "Kelvra.exe");
@@ -139,16 +147,7 @@ public sealed class PresentMonRunner : IDisposable
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
-        foreach (string arg in new[]
-                 {
-                     "--output_stdout", "--no_console_stats", "--stop_existing_session",
-                     "--session_name", SessionName, "--exclude", "dwm.exe", "--exclude", self,
-                     // PresentMon writes frames in order; one frame of a background game that never reaches the screen
-                     // holds back all newer ones until this buffer overflows. 2048 (the default) meant up to a minute
-                     // of old frames after alt-tab; 512 clears it within seconds and is still plenty while playing.
-                     "--set_circular_buffer_size", "512",
-                 })
-            info.ArgumentList.Add(arg);
+        foreach (string arg in Arguments(self, tracking)) info.ArgumentList.Add(arg);
 
         using var process = Process.Start(info) ?? throw new InvalidOperationException("PresentMon couldn't be started.");
         lock (run.Gate)
@@ -199,6 +198,30 @@ public sealed class PresentMonRunner : IDisposable
         process.WaitForExit(2000);
         Log.Info($"PresentMon exited (code {(process.HasExited ? process.ExitCode.ToString() : "?")}) after {frames:N0} frames");
         lock (run.Gate) run.Process = null;
+        return frames;
+    }
+
+    internal static string[] Arguments(string self, bool tracking)
+    {
+        var args = new List<string>
+        {
+            "--output_stdout", "--no_console_stats", "--stop_existing_session",
+            "--session_name", SessionName, "--exclude", "dwm.exe", "--exclude", self,
+            // PresentMon writes frames in order; one frame of a background game that never reaches the screen
+            // holds back all newer ones until this buffer overflows. 2048 (the default) meant up to a minute
+            // of old frames after alt-tab; 512 clears it within seconds and is still plenty while playing.
+            "--set_circular_buffer_size", "512",
+        };
+        if (tracking)
+        {
+            // Frames the driver generates (AMD Fluid Motion Frames, Intel XeSS-FG) get rows of their own with a FrameType;
+            // without this they're invisible and FPS shows only the rendered half
+            args.Add("--track_frame_type");
+            // Input-to-screen latency from NVIDIA Reflex (every game with DLSS frame generation has it). The usual
+            // estimate can't see the time frame generation holds a frame back
+            args.Add("--track_pc_latency");
+        }
+        return args.ToArray();
     }
 
     /// <summary>The bundled exe in an admin-only folder, locked against changes until <see cref="Cleanup"/>.</summary>

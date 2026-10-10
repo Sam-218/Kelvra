@@ -76,6 +76,8 @@ public sealed class AppSettings
     public List<string> GroupOrder { get; set; } = new();
     /// <summary>User-chosen System page card order (card titles). Cards not listed follow in default order.</summary>
     public List<string> SystemCardOrder { get; set; } = new();
+    /// <summary>Where the user put each System card on the snap grid, and how big, in display order. Empty = automatic.</summary>
+    public List<CardSpot> SystemCardLayout { get; set; } = new();
     /// <summary>null = default order; otherwise "Name", "TypeLabel", "Value", "Min" or "Max".</summary>
     public string? SensorSortKey { get; set; }
     public bool SensorSortDescending { get; set; }
@@ -178,6 +180,7 @@ public sealed class AppSettings
         CollapsedGroups ??= new();
         GroupOrder ??= new();
         SystemCardOrder ??= new();
+        SystemCardLayout = (SystemCardLayout ?? new()).Where(s => s is { Title: not null }).ToList();
         GameAlways = (GameAlways ?? new()).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         GameNever = (GameNever ?? new()).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         RemoveNulls(Alerts);

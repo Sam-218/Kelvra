@@ -18,9 +18,9 @@
 - **History** – graphs of up to 24 hours (every second for the last hour, one-minute averages before that) for everything, a category, or your own selection. Hover for exact values. Optionally kept on disk so graphs survive a restart. *Reset min/max* on the Sensors page starts the extremes over.
 - **CSV logging** – record whatever you're graphing to a CSV file.
 - **Alerts** – Windows toast notifications (Action Center) when a sensor stays above/below a limit (e.g. *GPU hotter than 85 °C for 5 s*), with cooldown and sound.
-- **System summary** – Windows version, CPU, GPU & driver, RAM sticks, board & BIOS, drive health (SMART) and network in one page – with a *Copy summary* button for forum posts.
+- **System summary** – Windows version, CPU, GPU & driver, RAM sticks (and whether XMP / EXPO looks off), board & BIOS, each drive's type, free space, health, temperature and lifetime reads/writes, and network in one page – with a *Copy summary* button for forum posts. The cards sit on an invisible snap grid (it shows as faint dots while you move one) and handle like windows: drag one by its header to any spot, empty ones too – the cards in its way move down – and drag its right or bottom edge or its corner to resize it (two cards side by side share their edge, like snapped windows). Edges snap to the grid and line up with the cards nearby; a card dropped next to another snaps to it. Double-click an edge to fill up to the next card or fit the content, *Tidy up* closes the gaps, and the ⋯ menu has sizes and moves without a mouse.
 - **Mini mode** – a small, optionally always-on-top window with CPU, GPU, memory and network, for a second screen.
-- °C / °F, dark / light / system theme, seven accent colours.
+- °C / °F, dark / light / system theme, and any accent colour you like (full colour picker with Kelvra's presets and your Windows accent colour; text and lines in it stay readable on both themes).
 
 **Fan control**
 - Per fan output: *Automatic* (BIOS/driver), a *fixed speed*, or a *curve* that follows any temperature sensor – drag the points, or type them.
@@ -29,7 +29,7 @@
 
 **In-game overlays**
 - As many on-screen overlays as you like, edited with a live, real-size preview over dark, bright or busy test backgrounds.
-- Looks: *Instrument*, *Minimal*, *Classic*, *Glass*, *Neon* or the original – then any installed font (separate font for numbers), weights, sizes, colours, border, panel and overall opacity, corner radius, padding, and a shadow or outline for bright scenes.
+- Looks: *Instrument*, *Minimal*, *Classic*, *Glass*, *Neon* or the original – then any installed font (separate font for numbers), weights, sizes, colours (any colour: a full picker with R / G / B, hex and presets), border, panel and overall opacity, corner radius, padding, and a shadow or outline for bright scenes.
 - Layouts: list, one line, or tiles in up to six columns, with adjustable spacing, headers and units.
 - Per sensor: custom label (or none), its own colour, decimal places, a fill bar, a mini graph, and its own warning limits; warning colours and limits per overlay.
 - Position: drag it anywhere, or pin it to any corner or edge of any monitor.
@@ -42,7 +42,9 @@
   - **FPS** and **frametime**, **1% / 0.1% lows** (last minute), session **average / min / max**
   - a live **frametime graph** of every frame with stutters marked, and a **stutter** counter
   - **bottleneck**: GPU-bound, CPU-bound, or capped by a limiter / VSync
-  - **latency** (frame start until it's on screen), **game name**, **play time**, and CPU / GPU load and temperatures
+  - **latency** (input until it's on screen in games with NVIDIA Reflex, otherwise frame start until it's on screen), **game name**, **play time**, and CPU / GPU load and temperatures
+  - **frame generation** from the driver (AMD Fluid Motion Frames, Intel XeSS-FG), with the FPS the game renders itself
+- Frame generation and upscalers: FPS counts every frame that reaches the screen, generated ones included, like NVIDIA's and AMD's own overlays. DLSS / FSR / XeSS upscaling doesn't change how frames are counted. When the GPU paces the frames itself (DLSS 4 flip metering, FSR frame generation), frame times, lows and stutters follow the screen's updates instead of the bunched presents, so they aren't shown worse than they look. NVIDIA Smooth Motion and Lossless Scaling generate frames PresentMon can't see; there FPS is the game's own rate.
 - FPS values are also a *Game* device in the sensor list, so normal overlays, History graphs, alerts (*FPS below 30*) and CSV logging work with them.
 - **Game sessions** (History): a summary of every game you played – average FPS, lows, stutters, what limited it, hottest CPU / GPU.
 - **Benchmark**: `Ctrl+Alt+F9` records a run and saves its summary plus every frame as CSV.
@@ -52,7 +54,7 @@
 - **Disk analyzer** – WizTree-style folder tree, file-type breakdown, largest files and a labelled, zoomable treemap. Right-click → open, show in Explorer, move to Recycle Bin.
 - **Cleanup** – temp files, NVIDIA/AMD/DirectX shader caches, Windows Update leftovers, crash dumps, browser caches, Recycle Bin. Files in use are skipped.
 - **Duplicate finder** – identical files by content (size → partial hash → SHA-256), hard links recognised; extra copies go to the Recycle Bin.
-- **Processes** – live CPU / memory / disk per process, end task, open file location.
+- **Processes** – live CPU / memory / disk like Task Manager's Processes tab: an app's helper processes are grouped under it (expand to see them), memory is the private working set, service hosts are named after their services. End task (one process or a whole app), open file location.
 - **Startup apps** – enable/disable what starts with Windows (same switch as Task Manager), plus scheduled tasks that run at sign-in, which Task Manager doesn't list.
 - **Start with Windows** – Kelvra itself can start minimised in the tray.
 

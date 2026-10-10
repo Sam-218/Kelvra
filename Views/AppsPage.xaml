@@ -30,52 +30,135 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="80" />
                             <ColumnDefinition Width="90" />
-                            <ColumnDefinition Width="100" />
+                            <ColumnDefinition Width="110" />
                             <ColumnDefinition Width="100" />
                         </Grid.ColumnDefinitions>
-                        <Button x:Name="SortName" Style="{StaticResource SortHeader}" Tag="DisplayName" HorizontalAlignment="Left" Click="Sort_Click" />
+                        <Button x:Name="SortName" Style="{StaticResource SortHeader}" Tag="DisplayName" HorizontalAlignment="Left" Margin="28,0,0,0" Click="Sort_Click" />
                         <Button x:Name="SortPid" Grid.Column="1" Style="{StaticResource SortHeader}" Tag="Pid" HorizontalAlignment="Right" Click="Sort_Click" />
                         <Button x:Name="SortCpu" Grid.Column="2" Style="{StaticResource SortHeader}" Tag="Cpu" HorizontalAlignment="Right" Click="Sort_Click" />
-                        <Button x:Name="SortMemory" Grid.Column="3" Style="{StaticResource SortHeader}" Tag="Memory" HorizontalAlignment="Right" Click="Sort_Click" />
+                        <Button x:Name="SortMemory" Grid.Column="3" Style="{StaticResource SortHeader}" Tag="Memory" HorizontalAlignment="Right" Click="Sort_Click"
+                                ToolTip="Private working set, the same number Task Manager shows" />
                         <Button x:Name="SortDisk" Grid.Column="4" Style="{StaticResource SortHeader}" Tag="Disk" HorizontalAlignment="Right" Click="Sort_Click" />
                     </Grid>
                     <Rectangle DockPanel.Dock="Top" Height="1" Fill="{DynamicResource LineBrush}" Margin="6,0" />
-                    <ListView x:Name="ProcessList" ItemContainerStyle="{StaticResource PlainRow}"
+                    <ListView x:Name="ProcessList"
                               VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
-                              PreviewMouseRightButtonUp="ProcessList_RightClick" KeyDown="ProcessList_KeyDown">
+                              PreviewMouseRightButtonUp="ProcessList_RightClick" KeyDown="ProcessList_KeyDown"
+                              MouseDoubleClick="ProcessList_DoubleClick">
                         <ListView.Resources>
                             <Style TargetType="ListViewItem" BasedOn="{StaticResource PlainRow}">
                                 <Setter Property="Focusable" Value="True" />
                             </Style>
-                        </ListView.Resources>
-                        <ListView.ItemTemplate>
+
+                            <!-- The ▸ in front of an app with several processes -->
+                            <Style x:Key="Chevron" TargetType="Button">
+                                <Setter Property="Width" Value="22" />
+                                <Setter Property="Height" Value="22" />
+                                <Setter Property="Margin" Value="0,0,6,0" />
+                                <Setter Property="Cursor" Value="Hand" />
+                                <Setter Property="Focusable" Value="False" />
+                                <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="Bd" CornerRadius="4" Background="Transparent">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBrush}" />
+                                                    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+
+                            <!-- An app with several processes: their numbers added up -->
+                            <DataTemplate DataType="{x:Type local:AppGroup}">
+                                <Grid ToolTip="{Binding Path}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="80" />
+                                        <ColumnDefinition Width="90" />
+                                        <ColumnDefinition Width="110" />
+                                        <ColumnDefinition Width="100" />
+                                    </Grid.ColumnDefinitions>
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Left" Style="{StaticResource Chevron}" Click="Expand_Click"
+                                                AutomationProperties.Name="Show or hide the app's processes">
+                                            <TextBlock x:Name="Arrow" Text="&#xE76C;" Style="{StaticResource Icon}" FontSize="10" RenderTransformOrigin="0.5,0.5">
+                                                <TextBlock.RenderTransform>
+                                                    <RotateTransform Angle="0" />
+                                                </TextBlock.RenderTransform>
+                                            </TextBlock>
+                                        </Button>
+                                        <Grid DockPanel.Dock="Left" Width="20" Height="20" Margin="0,0,10,0">
+                                            <TextBlock Text="&#xE7C4;" Style="{StaticResource Icon}" Foreground="{DynamicResource MutedBrush}"
+                                                       HorizontalAlignment="Center" />
+                                            <Image Source="{Binding Icon}" Width="20" Height="20" />
+                                        </Grid>
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding ImageName}" Style="{StaticResource Muted}"
+                                                   VerticalAlignment="Center" Margin="8,0,8,0" />
+                                        <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+                                            <Run Text="{Binding DisplayName, Mode=OneWay}" /><Run
+                                                 Text="{Binding Count, Mode=OneWay, StringFormat='  ({0})'}" Foreground="{DynamicResource MutedBrush}" />
+                                        </TextBlock>
+                                    </DockPanel>
+                                    <TextBlock Grid.Column="2" Text="{Binding CpuText}" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="3" Text="{Binding MemoryText}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="4" Text="{Binding DiskText}" Foreground="{DynamicResource MutedBrush}"
+                                               HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                </Grid>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding IsExpanded}" Value="True">
+                                        <Setter TargetName="Arrow" Property="RenderTransform">
+                                            <Setter.Value>
+                                                <RotateTransform Angle="90" />
+                                            </Setter.Value>
+                                        </Setter>
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+
+                            <!-- One process: on its own, or indented under its app -->
                             <DataTemplate DataType="{x:Type local:ProcessRow}">
                                 <Grid ToolTip="{Binding Path}">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="80" />
                                         <ColumnDefinition Width="90" />
-                                        <ColumnDefinition Width="100" />
+                                        <ColumnDefinition Width="110" />
                                         <ColumnDefinition Width="100" />
                                     </Grid.ColumnDefinitions>
-                                    <DockPanel>
+                                    <DockPanel x:Name="NameCell" Margin="28,0,0,0">
                                         <Grid DockPanel.Dock="Left" Width="20" Height="20" Margin="0,0,10,0">
                                             <TextBlock Text="&#xE7C4;" Style="{StaticResource Icon}" Foreground="{DynamicResource MutedBrush}"
                                                        HorizontalAlignment="Center" />
                                             <Image Source="{Binding Icon}" Width="20" Height="20" />
                                         </Grid>
-                                        <TextBlock DockPanel.Dock="Right" Text="{Binding Name, StringFormat='{}{0}.exe'}" Style="{StaticResource Muted}"
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding ImageName}" Style="{StaticResource Muted}"
                                                    VerticalAlignment="Center" Margin="8,0,8,0" />
-                                        <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock x:Name="Title" Text="{Binding DisplayName}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                                     </DockPanel>
                                     <TextBlock Grid.Column="1" Text="{Binding Pid}" Style="{StaticResource Muted}" HorizontalAlignment="Right" VerticalAlignment="Center" />
-                                    <TextBlock Grid.Column="2" Text="{Binding CpuText}" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
-                                    <TextBlock Grid.Column="3" Text="{Binding MemoryText}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                    <TextBlock x:Name="CpuValue" Grid.Column="2" Text="{Binding CpuText}" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                    <TextBlock x:Name="MemoryValue" Grid.Column="3" Text="{Binding MemoryText}" HorizontalAlignment="Right" VerticalAlignment="Center" />
                                     <TextBlock Grid.Column="4" Text="{Binding DiskText}" Foreground="{DynamicResource MutedBrush}"
                                                HorizontalAlignment="Right" VerticalAlignment="Center" />
                                 </Grid>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding IsChild}" Value="True">
+                                        <Setter TargetName="NameCell" Property="Margin" Value="58,0,0,0" />
+                                        <Setter TargetName="Title" Property="Foreground" Value="{DynamicResource MutedBrush}" />
+                                        <Setter TargetName="CpuValue" Property="FontWeight" Value="Normal" />
+                                        <Setter TargetName="CpuValue" Property="Foreground" Value="{DynamicResource MutedBrush}" />
+                                        <Setter TargetName="MemoryValue" Property="Foreground" Value="{DynamicResource MutedBrush}" />
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
                             </DataTemplate>
-                        </ListView.ItemTemplate>
+                        </ListView.Resources>
                     </ListView>
                 </DockPanel>
             </Border>

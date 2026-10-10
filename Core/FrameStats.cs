@@ -4,6 +4,10 @@ namespace Kelvra;
 public enum Bottleneck { Unknown, GpuBound, CpuBound, Capped }
 
 /// <summary>The numbers the gaming overlay shows, worked out from the frames of the last second / minute / session.</summary>
+/// <param name="Fps">Frames per second on screen right now, generated frames included (like the GPU makers' own overlays).</param>
+/// <param name="FrameGeneration">Who generates frames ("AMD AFMF", "Intel XeSS-FG") when the driver reports it; else null.</param>
+/// <param name="RenderedFps">With <paramref name="FrameGeneration"/>: the frames the game renders itself per second.</param>
+/// <param name="PacedByDisplay">Frame times follow the screen's updates, not the game's presents (see <see cref="FrameStats"/>).</param>
 public sealed record FrameSnapshot(
     double? Fps,
     double? FrameTimeMs,
@@ -18,7 +22,10 @@ public sealed record FrameSnapshot(
     Bottleneck Bound,
     double? LatencyMs,
     string PresentMode,
-    TimeSpan SessionLength)
+    TimeSpan SessionLength,
+    string? FrameGeneration = null,
+    double? RenderedFps = null,
+    bool PacedByDisplay = false)
 {
     public static readonly FrameSnapshot Empty = new(null, null, null, null, null, null, null, 0, null, null,
                                                     Bottleneck.Unknown, null, "", TimeSpan.Zero);
@@ -31,6 +38,13 @@ public readonly record struct FramePoint(double TimeMs, double FrameTimeMs, bool
 /// Frame statistics for one game: rolling 1 s values (FPS, frametime, GPU busy, latency), 60 s percentile lows,
 /// session averages, stutters, and the recent frametimes for the graph. Frames arrive on PresentMon's reader thread,
 /// snapshots are taken on the UI thread, so everything is behind one lock.
+/// <para>
+/// Frame times normally run from one present to the next, like other overlays measure them. Two cases follow the
+/// screen's updates instead (PresentMon's MsBetweenDisplayChange), because presents don't show what you see there:
+/// frame generation in the driver (its frames have no present of their own), and frames the GPU paces itself (DLSS 4
+/// flip metering, FSR frame generation), which a game hands over in bursts – present-to-present times jump between
+/// ~0 and twice the real interval although the picture is smooth, which made lows and stutters look far worse.
+/// </para>
 /// </summary>
 public sealed class FrameStats
 {
@@ -43,9 +57,21 @@ public sealed class FrameStats
     private const int MedianFrames = 60;
     private const int HistogramBuckets = 10_001; // 0.1 ms steps up to 1 s
 
-    private readonly record struct Frame(double Time, double Ms, double? GpuBusy, double? Latency, bool Stutter);
+    /// <summary>Generated frames seen this recently (wall clock, ms) mean frame generation is on.</summary>
+    internal const long FrameGenHoldMs = 2000;
+    private const int PaceWindow = 120, PaceEvery = 30;
+
+    private readonly record struct Frame(double Time, double Ms, double? GpuBusy, double? Latency, bool ReflexLatency, bool Stutter, bool Generated);
 
     private readonly object _lock = new();
+
+    // Present-to-present vs. screen-to-screen times of the game's own recent frames: which of them to go by (see TrackPacing)
+    private readonly double[] _pacePresent = new double[PaceWindow];
+    private readonly double[] _paceDisplay = new double[PaceWindow]; // NaN = never shown
+    private int _paceCount, _paceHead, _paceSince;
+    private bool _byDisplay, _wasByDisplay, _paceDecided;
+    private long? _generatedAt;
+    private string _generator = "";
 
     // The last 60 s of frames, oldest first, as a ring (read newest-first for "the last second" without walking the
     // whole minute, which at 1000+ FPS in menus is 60k+ frames)
@@ -95,10 +121,37 @@ public sealed class FrameStats
         lock (_lock)
         {
             if (!FollowSwapChain(s)) return;
+            long now = _clock();
+            if (s.Generated)
+            {
+                _generatedAt = now;
+                _generator = s.FrameType;
+            }
+            else if (s.FrameTimeMs <= PauseMs) TrackPacing(s.FrameTimeMs, s.DisplayedMs);
 
-            double ms = s.FrameTimeMs;
+            double ms;
+            _lastArrival = now;
+            bool byDisplay = ByDisplay(now);
+            if (byDisplay != _wasByDisplay)
+            {
+                // The other kind of frame time from here on: don't mix the two in the lows and the stutter median
+                _wasByDisplay = byDisplay;
+                _ringHead = _ringCount = 0;
+                _recentHead = _recentCount = 0;
+                _version++;
+            }
+            if (byDisplay)
+            {
+                // A frame that never reached the screen isn't one you saw; the next shown frame's interval covers its time
+                if (s.DisplayedMs is not double shown) return;
+                ms = shown;
+            }
+            else
+            {
+                if (s.Generated) return; // (generated frames switch to the screen's timeline above)
+                ms = s.FrameTimeMs;
+            }
             double time = _timelineMs += ms;
-            _lastArrival = _clock();
             if (ms > PauseMs)
             {
                 // A loading screen, alt-tab or a frozen game: time passes, but it isn't gameplay, so it doesn't
@@ -108,7 +161,8 @@ public sealed class FrameStats
                 _secondStart = time;
                 return;
             }
-            bool stutter = IsStutter(ms);
+            // Not before it's clear which frame times to go by: bunched presents (frame generation) would read as stutters
+            bool stutter = _paceDecided && IsStutter(ms);
             PushRecent(ms);
             if (stutter)
             {
@@ -116,7 +170,9 @@ public sealed class FrameStats
                 _lastStutterAt = _lastArrival; // wall clock: "ago" stays right across alt-tab, when no frames are counted
             }
 
-            Push(new Frame(time, ms, s.GpuBusyMs, s.LatencyMs, stutter));
+            // A generated frame adds no GPU time of the game's own (PresentMon says 0) but does add time: GPU busy stays
+            // "share of the time the GPU worked for the game"
+            Push(new Frame(time, ms, s.GpuBusyMs, s.LatencyMs, s.PcLatency != null, stutter, s.Generated));
             while (_ringCount > 0 && _ring[_ringHead].Time < time - WindowMs)
             {
                 _ringHead = (_ringHead + 1) % _ring.Length;
@@ -169,6 +225,7 @@ public sealed class FrameStats
 
             if (_version != _lowsVersion && (_lowsVersion < 0 || now - _lowsAt >= LowsEveryMs)) UpdateLows(now);
             double? low1 = _low1, low01 = _low01;
+            bool frameGen = !stale && FrameGenOn(now);
 
             return new FrameSnapshot(
                 stale ? null : second.Fps,
@@ -182,8 +239,65 @@ public sealed class FrameStats
                 stale ? Bottleneck.Unknown : Classify(second.GpuFraction, second.Variation, _sync > 0),
                 stale ? null : second.Latency,
                 _mode,
-                TimeSpan.FromMilliseconds(Math.Max(0, _lastMs - _firstMs)));
+                TimeSpan.FromMilliseconds(Math.Max(0, _lastMs - _firstMs)),
+                frameGen ? _generator : null,
+                frameGen ? second.RenderedFps : null,
+                !stale && ByDisplay(now));
         }
+    }
+
+    private bool FrameGenOn(long now) => _generatedAt is long at && now - at <= FrameGenHoldMs;
+
+    /// <summary>Frame times follow the screen: frame generation is on, or the GPU paces the frames (see <see cref="TrackPacing"/>).</summary>
+    private bool ByDisplay(long now) => _byDisplay || FrameGenOn(now);
+
+    /// <summary>
+    /// Every 30 of the game's frames, looks at its last 120: when (nearly) all of them reach the screen and the screen's
+    /// intervals are much steadier than the present-to-present ones, the GPU paces the frames (DLSS 4 flip metering, FSR
+    /// frame generation) and the screen's intervals are what you see. A margin keeps it from flipping back and forth.
+    /// </summary>
+    private void TrackPacing(double presentMs, double? displayedMs)
+    {
+        _pacePresent[_paceHead] = presentMs;
+        _paceDisplay[_paceHead] = displayedMs ?? double.NaN;
+        _paceHead = (_paceHead + 1) % PaceWindow;
+        if (_paceCount < PaceWindow) _paceCount++;
+        if (++_paceSince < PaceEvery || _paceCount < PaceWindow / 2) return;
+        _paceSince = 0;
+        _byDisplay = PacedByDisplay(_pacePresent.AsSpan(0, _paceCount), _paceDisplay.AsSpan(0, _paceCount), _byDisplay);
+        _paceDecided = true;
+    }
+
+    /// <param name="displayed">Screen-to-screen times; NaN for frames that weren't shown.</param>
+    /// <param name="now">Whether frame times follow the screen right now (switching back needs a clearer case).</param>
+    internal static bool PacedByDisplay(ReadOnlySpan<double> presents, ReadOnlySpan<double> displayed, bool now)
+    {
+        if (presents.Length == 0) return false;
+        int shown = 0;
+        foreach (double d in displayed)
+            if (!double.IsNaN(d)) shown++;
+        double fraction = (double)shown / presents.Length;
+        double present = Variation(presents), screen = Variation(displayed);
+        return now
+            ? fraction >= 0.8 && present >= 0.12 && screen <= present * 0.8
+            : fraction >= 0.9 && present >= 0.18 && screen <= present * 0.5;
+    }
+
+    /// <summary>Standard deviation ÷ mean of the values (NaN ones skipped); 0 for fewer than two.</summary>
+    internal static double Variation(ReadOnlySpan<double> values)
+    {
+        int n = 0;
+        double sum = 0, sumSq = 0;
+        foreach (double v in values)
+        {
+            if (double.IsNaN(v)) continue;
+            n++;
+            sum += v;
+            sumSq += v * v;
+        }
+        if (n < 2 || sum <= 0) return 0;
+        double mean = sum / n;
+        return Math.Sqrt(Math.Max(0, sumSq / n - mean * mean)) / mean;
     }
 
     /// <summary>Frames of the last <paramref name="spanMs"/> (up to the newest one), oldest first, for the frametime graph.</summary>
@@ -286,11 +400,11 @@ public sealed class FrameStats
         }
     }
 
-    private (double? Fps, double? FrameTime, double? GpuFraction, double Variation, double? Latency) Second()
+    private (double? Fps, double? FrameTime, double? GpuFraction, double Variation, double? Latency, double? RenderedFps) Second()
     {
         double from = _lastMs - SecondMs;
-        int n = 0, gpuN = 0, latN = 0;
-        double sum = 0, sumSq = 0, gpu = 0, gpuFt = 0, lat = 0;
+        int n = 0, gpuN = 0, latN = 0, reflexN = 0, generated = 0;
+        double sum = 0, sumSq = 0, gpu = 0, gpuFt = 0, lat = 0, reflex = 0;
         for (int i = _ringCount - 1; i >= 0; i--)
         {
             var f = At(i);
@@ -298,15 +412,23 @@ public sealed class FrameStats
             n++;
             sum += f.Ms;
             sumSq += f.Ms * f.Ms;
+            if (f.Generated) generated++;
             if (f.GpuBusy is double g) { gpu += g; gpuFt += f.Ms; gpuN++; }
-            if (f.Latency is double l) { lat += l; latN++; }
+            if (f.Latency is double l)
+            {
+                // Reflex's input-to-screen latency, where the game reports it, is the better number: don't mix in estimates
+                if (f.ReflexLatency) { reflex += l; reflexN++; }
+                else { lat += l; latN++; }
+            }
         }
-        if (n == 0 || sum <= 0) return (null, null, null, 1, null);
+        if (n == 0 || sum <= 0) return (null, null, null, 1, null, null);
         double mean = sum / n;
         double variation = Math.Sqrt(Math.Max(0, sumSq / n - mean * mean)) / mean;
         return (n * 1000 / sum, mean,
                 gpuN > 0 && gpuFt > 0 ? Math.Min(1, gpu / gpuFt) : null,
-                variation, latN > 0 ? lat / latN : null);
+                variation,
+                reflexN > 0 ? reflex / reflexN : latN > 0 ? lat / latN : null,
+                generated > 0 ? (n - generated) * 1000 / sum : null);
     }
 
     /// <summary>The frametime at percentile <paramref name="p"/> (0.99 = only 1 % of frames were slower) of the first <paramref name="length"/> sorted values.</summary>

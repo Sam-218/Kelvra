@@ -132,21 +132,27 @@ public static class GameSessionLog
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         using var w = new StreamWriter(path, append: false, new UTF8Encoding(false), bufferSize: 1 << 16);
-        w.Write("TimeMs,FrameTimeMs,FPS,CpuBusyMs,GpuBusyMs,LatencyMs,Displayed\r\n");
+        // DisplayedMs: screen update to screen update (the frame pacing you see; use it with frame generation).
+        // Generated: made by the driver's frame generation; it repeats the FrameTimeMs of the present it belongs to.
+        w.Write("TimeMs,FrameTimeMs,FPS,CpuBusyMs,GpuBusyMs,LatencyMs,Displayed,DisplayedMs,Generated\r\n");
         double time = 0; // frame-time timeline from the first frame (independent of PresentMon's time column)
         static string O(double? v) => v is double d ? d.ToString("0.###", CultureInfo.InvariantCulture) : "";
-        for (int i = 0; i < frames.Count; i++)
+        bool first = true;
+        foreach (var f in frames)
         {
-            var f = frames[i];
-            if (i > 0) time += f.FrameTimeMs;
-            w.Write($"{O(time)},{O(f.FrameTimeMs)},{O(1000 / f.FrameTimeMs)},{O(f.CpuBusyMs)},{O(f.GpuBusyMs)},{O(f.LatencyMs)},{(f.Displayed ? "1" : "0")}\r\n");
+            // A generated frame shares its present: the time moves on with the game's next own frame
+            if (!first && !f.Generated) time += f.FrameTimeMs;
+            first = false;
+            w.Write($"{O(time)},{O(f.FrameTimeMs)},{O(1000 / f.FrameTimeMs)},{O(f.CpuBusyMs)},{O(f.GpuBusyMs)},{O(f.LatencyMs)}," +
+                    $"{(f.Displayed ? "1" : "0")},{O(f.DisplayedMs)},{(f.Generated ? "1" : "0")}\r\n");
         }
     }
 }
 
-/// <summary>One frame of a benchmark, kept compact (~32 bytes instead of a whole parsed CSV line): a run can hold millions.</summary>
-public readonly record struct BenchFrame(float FrameTimeMs, float? CpuBusyMs, float? GpuBusyMs, float? LatencyMs, bool Displayed)
+/// <summary>One frame of a benchmark, kept compact (~40 bytes instead of a whole parsed CSV line): a run can hold millions.</summary>
+public readonly record struct BenchFrame(float FrameTimeMs, float? CpuBusyMs, float? GpuBusyMs, float? LatencyMs, bool Displayed,
+                                         float? DisplayedMs = null, bool Generated = false)
 {
     public static BenchFrame From(FrameSample s) =>
-        new((float)s.FrameTimeMs, (float?)s.CpuBusyMs, (float?)s.GpuBusyMs, (float?)s.LatencyMs, s.Displayed);
+        new((float)s.FrameTimeMs, (float?)s.CpuBusyMs, (float?)s.GpuBusyMs, (float?)s.LatencyMs, s.Displayed, (float?)s.DisplayedMs, s.Generated);
 }

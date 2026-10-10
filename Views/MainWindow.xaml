@@ -110,9 +110,13 @@
                                 </Border>
                             </Grid>
                             <Grid Margin="0,12,0,0">
-                                <TextBlock Text="Accent colour" Style="{StaticResource FieldLabel}" />
-                                <StackPanel x:Name="AccentSwatches" Orientation="Horizontal" HorizontalAlignment="Right"
-                                            AutomationProperties.Name="Accent colour" />
+                                <StackPanel VerticalAlignment="Center" Margin="0,0,140,0">
+                                    <TextBlock Text="Accent colour" Style="{StaticResource FieldLabel}" />
+                                    <TextBlock Style="{StaticResource Muted}" Margin="0,2,0,0"
+                                               Text="Any colour you like. Text and lines in it are kept readable on the dark and the light theme." />
+                                </StackPanel>
+                                <local:ColorField x:Name="AccentField" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                  AutomationProperties.Name="Accent colour" />
                             </Grid>
                             <Grid Margin="0,12,0,0">
                                 <TextBlock Text="Temperature unit" Style="{StaticResource FieldLabel}" />

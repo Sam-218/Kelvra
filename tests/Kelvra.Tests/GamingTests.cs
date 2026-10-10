@@ -640,9 +640,9 @@ public class GamingTests
             BenchFrame.From(Frame(1010, 12.5, untilDisplayed: null)),
         });
         var lines = File.ReadAllLines(path);
-        Assert.Equal("TimeMs,FrameTimeMs,FPS,CpuBusyMs,GpuBusyMs,LatencyMs,Displayed", lines[0]);
-        Assert.Equal("0,10,100,6,9,10,1", lines[1]);
-        Assert.Equal("12.5,12.5,80,,,,0", lines[2]);
+        Assert.Equal("TimeMs,FrameTimeMs,FPS,CpuBusyMs,GpuBusyMs,LatencyMs,Displayed,DisplayedMs,Generated", lines[0]);
+        Assert.Equal("0,10,100,6,9,10,1,,0", lines[1]);
+        Assert.Equal("12.5,12.5,80,,,,0,,0", lines[2]);
     }
 
     [Fact]
