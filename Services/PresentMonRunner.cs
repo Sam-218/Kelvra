@@ -99,6 +99,9 @@ public sealed class PresentMonRunner : IDisposable
     {
         int failures = 0;
         bool tracking = true; // frame types and Reflex latency: PresentMon calls these options beta, so they're dropped if it chokes on them
+        // Frame types only where the driver can generate frames PresentMon reports (see Arguments)
+        bool frameTypes = SystemInfo.HasAmdOrIntelGpu();
+        Log.Info($"PresentMon frame-type tracking {(frameTypes ? "on (AMD/Intel graphics)" : "off (no AMD/Intel graphics)")}");
         try
         {
             while (!run.Stopping)
@@ -107,7 +110,7 @@ public sealed class PresentMonRunner : IDisposable
                 long frames = 0;
                 try
                 {
-                    frames = RunOnce(run, tracking);
+                    frames = RunOnce(run, tracking, frameTypes);
                     if (!run.Stopping) Error = "PresentMon stopped unexpectedly; restarting.";
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
@@ -136,7 +139,7 @@ public sealed class PresentMonRunner : IDisposable
     }
 
     /// <returns>How many frames it delivered.</returns>
-    private long RunOnce(RunState run, bool tracking)
+    private long RunOnce(RunState run, bool tracking, bool frameTypes)
     {
         string exe = Extract(run);
         string self = Path.GetFileName(Environment.ProcessPath ?? "Kelvra.exe");
@@ -147,7 +150,7 @@ public sealed class PresentMonRunner : IDisposable
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
-        foreach (string arg in Arguments(self, tracking)) info.ArgumentList.Add(arg);
+        foreach (string arg in Arguments(self, tracking, frameTypes)) info.ArgumentList.Add(arg);
 
         using var process = Process.Start(info) ?? throw new InvalidOperationException("PresentMon couldn't be started.");
         lock (run.Gate)
@@ -201,22 +204,26 @@ public sealed class PresentMonRunner : IDisposable
         return frames;
     }
 
-    internal static string[] Arguments(string self, bool tracking)
+    /// <param name="frameTypes">An AMD or Intel GPU is installed (see <see cref="SystemInfo.HasAmdOrIntelGpu"/>).</param>
+    internal static string[] Arguments(string self, bool tracking, bool frameTypes)
     {
         var args = new List<string>
         {
             "--output_stdout", "--no_console_stats", "--stop_existing_session",
             "--session_name", SessionName, "--exclude", "dwm.exe", "--exclude", self,
-            // PresentMon writes frames in order; one frame of a background game that never reaches the screen
-            // holds back all newer ones until this buffer overflows. 2048 (the default) meant up to a minute
-            // of old frames after alt-tab; 512 clears it within seconds and is still plenty while playing.
-            "--set_circular_buffer_size", "512",
+            // PresentMon hands frames on through one queue, in order: a frame it still waits on (a late event; with
+            // frame types, every shown frame until the screen's next flip) holds all newer ones back for up to 2 s, and a
+            // full queue throws its oldest frames away. The next frame then spans all the lost ones – fake stutters and
+            // far too low FPS (Wardogs under the overlay read 20 instead of ~100 with 512). The default size holds 2 s
+            // even at 1000 frames a second; frames that come out late are skipped (LateFrameFilter).
+            "--set_circular_buffer_size", "2048",
         };
         if (tracking)
         {
             // Frames the driver generates (AMD Fluid Motion Frames, Intel XeSS-FG) get rows of their own with a FrameType;
-            // without this they're invisible and FPS shows only the rendered half
-            args.Add("--track_frame_type");
+            // without this they're invisible and FPS shows only the rendered half. Only where such a driver can be:
+            // it's what makes PresentMon hold back every frame (above), and NVIDIA's frame generation isn't reported
+            if (frameTypes) args.Add("--track_frame_type");
             // Input-to-screen latency from NVIDIA Reflex (every game with DLSS frame generation has it). The usual
             // estimate can't see the time frame generation holds a frame back
             args.Add("--track_pc_latency");

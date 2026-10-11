@@ -209,7 +209,7 @@ public class GamingTests
     [Fact]
     public void Late_filter_starts_over_when_every_frame_is_late_for_10_seconds()
     {
-        // Not a backlog (with a 512-frame buffer those clear in seconds) but the clocks drifted: don't lose FPS for good
+        // Not a backlog (PresentMon holds frames back 2 s at most; those clear in seconds) but the clocks drifted: don't lose FPS for good
         var late = new LateFrameFilter();
         Assert.False(late.IsLate(1000, 11_000));
         double t = 2000;
@@ -264,6 +264,7 @@ public class GamingTests
         Assert.False(late.IsLate(1000, 11_050));
         Assert.False(late.IsLate(2000, 12_040));
         Assert.False(late.IsLate(3000, 13_900));   // 0.9 s behind: still fine
+        Assert.False(late.IsLate(3500, 15_840));   // 2.3 s: PresentMon held it back, still a frame of right now
         Assert.True(late.IsLate(4000, 30_000));    // 16 s behind: a backlog
         Assert.False(late.IsLate(0, 99_999));      // no time column: never late
 

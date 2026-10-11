@@ -528,7 +528,8 @@ public static class GameRules
 /// </summary>
 internal sealed class LateFrameFilter
 {
-    internal const double LateMs = 1500;
+    /// <summary>Above the 2 s PresentMon may hold a frame back (see <see cref="PresentMonRunner.Arguments"/>): those are still real-time.</summary>
+    internal const double LateMs = 2500;
     internal const double GiveUpMs = 10_000;
     private double _onTime = double.MaxValue;
     private double? _lateSince;

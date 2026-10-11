@@ -129,6 +129,18 @@ public static class SystemInfo
         return new("Graphics", "", lines);
     }
 
+    /// <summary>
+    /// An AMD or Intel graphics adapter is installed: the only ones whose driver frame generation (Fluid Motion Frames,
+    /// XeSS-FG) PresentMon tells apart from the game's own frames. Goes by the PCI vendor, not the name.
+    /// </summary>
+    public static bool HasAmdOrIntelGpu() =>
+        Query("SELECT PNPDeviceID FROM Win32_VideoController").Any(g => IsAmdOrIntel(Str(g, "PNPDeviceID")));
+
+    /// <param name="pnpDeviceId">"PCI\VEN_1002&amp;DEV_744C&amp;…" (1002 = AMD, 8086 = Intel, 10DE = NVIDIA).</param>
+    internal static bool IsAmdOrIntel(string pnpDeviceId) =>
+        pnpDeviceId.Contains("VEN_1002", StringComparison.OrdinalIgnoreCase) ||
+        pnpDeviceId.Contains("VEN_8086", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>NVIDIA's own version ("617.14") from the Windows driver version (32.0.16.1714); null for other vendors.</summary>
     internal static string? NvidiaVersion(string adapter, string windowsVersion)
     {

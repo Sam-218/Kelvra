@@ -129,12 +129,35 @@ public class FrameGenerationTests
     [Fact]
     public void Presentmon_is_asked_for_frame_types_and_reflex_latency_unless_it_choked_on_them()
     {
-        var full = PresentMonRunner.Arguments("Kelvra.exe", tracking: true);
+        var full = PresentMonRunner.Arguments("Kelvra.exe", tracking: true, frameTypes: true);
         Assert.Contains("--track_frame_type", full);
         Assert.Contains("--track_pc_latency", full);
-        var plain = PresentMonRunner.Arguments("Kelvra.exe", tracking: false);
+        var plain = PresentMonRunner.Arguments("Kelvra.exe", tracking: false, frameTypes: true);
         Assert.DoesNotContain("--track_frame_type", plain);
         Assert.Equal(full.Length - 2, plain.Length);
+    }
+
+    [Fact]
+    public void Frame_types_are_only_tracked_with_amd_or_intel_graphics()
+    {
+        // Tracking them makes PresentMon hold back every frame; only AMD's and Intel's driver frame generation is reported
+        var nvidia = PresentMonRunner.Arguments("Kelvra.exe", tracking: true, frameTypes: false);
+        Assert.DoesNotContain("--track_frame_type", nvidia);
+        Assert.Contains("--track_pc_latency", nvidia);
+
+        Assert.True(SystemInfo.IsAmdOrIntel(@"PCI\VEN_1002&DEV_744C&SUBSYS_0E3B1002&REV_C8\6&1A2B3C4D&0&00000019"));
+        Assert.True(SystemInfo.IsAmdOrIntel(@"PCI\VEN_8086&DEV_A780&SUBSYS_7D251462&REV_04\3&11583659&0&10"));
+        Assert.False(SystemInfo.IsAmdOrIntel(@"PCI\VEN_10DE&DEV_2882&SUBSYS_40EE1458&REV_A1\4&2D78AB8F&0&0008"));
+        Assert.False(SystemInfo.IsAmdOrIntel(@"ROOT\BASICDISPLAY\0000"));
+    }
+
+    [Fact]
+    public void Presentmon_queue_holds_the_frames_it_holds_back()
+    {
+        // PresentMon holds frames back up to 2 s; a smaller queue throws game frames away (Wardogs read 20 FPS instead of ~100)
+        var args = PresentMonRunner.Arguments("Kelvra.exe", tracking: true, frameTypes: true);
+        int size = int.Parse(args[Array.IndexOf(args, "--set_circular_buffer_size") + 1]);
+        Assert.True(size >= 2048);
     }
 
     [Fact]
