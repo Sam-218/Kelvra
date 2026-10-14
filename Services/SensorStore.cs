@@ -152,15 +152,23 @@ public sealed class SensorStore : IDisposable
     /// <summary>Resets every sensor's min/max; the new values show after the next poll.</summary>
     public Task ResetMinMaxAsync() => Task.Run(_hardware.ResetMinMax);
 
-    /// <summary>Updates known sensors in place (bindings just see property changes) and appends newly found ones.</summary>
+    /// <summary>
+    /// Updates known sensors in place (bindings just see property changes) and appends newly found ones. Sensors missing
+    /// from this poll (unplugged, deactivated by the driver) lose their value, so fans, alerts and overlays don't follow
+    /// a frozen reading.
+    /// </summary>
     private void Apply(List<SensorReading> readings)
     {
         var fresh = new List<SensorReading>();
+        var seen = new HashSet<string>(readings.Count);
         foreach (var r in readings)
         {
+            seen.Add(r.Id);
             if (ById.TryGetValue(r.Id, out var vm)) vm.Update(r);
             else fresh.Add(r);
         }
+        foreach (var vm in All)
+            if (!seen.Contains(vm.Id)) vm.Clear();
         if (fresh.Count == 0) return;
 
         foreach (var r in fresh)

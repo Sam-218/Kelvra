@@ -117,7 +117,7 @@ public sealed class GameMonitor : IDisposable
             return;
         }
         _timer.Stop();
-        Task.Run(Runner.Stop); // ending the trace session can take a few seconds: not on the UI thread
+        _ = Runner.StopAsync(); // ending the trace session can take a few seconds: not on the UI thread
         lock (_lock)
         {
             _candidate = null;

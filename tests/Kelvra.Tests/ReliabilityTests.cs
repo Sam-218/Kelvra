@@ -107,6 +107,29 @@ public class ReliabilityTests
     }
 
     [Fact]
+    public async Task A_sensor_missing_from_a_poll_loses_its_value_and_its_fan_goes_back_to_automatic()
+    {
+        var temp = new SensorReading("/cpu/0/temperature/0", "/cpu/0", "CPU", HardwareType.Cpu, "Package", SensorType.Temperature, 70, 70, 70);
+        var control = new SensorReading("/lpc/0/control/1", "/mb", "Board", HardwareType.Motherboard, "Fan #1", SensorType.Control, 40, 40, 40) { Controllable = true };
+        int calls = 0;
+        // The temperature sensor is there once, then the driver drops it (unplugged, deactivated)
+        var store = new SensorStore(() => ++calls == 1 ? new() { temp, control } : new() { control });
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(0.5));
+        await store.RunAsync(() => 100, cts.Token);
+
+        var sensor = store.ById[temp.Id];
+        Assert.Null(sensor.Value);
+        Assert.Equal("-", sensor.ValueText);
+        Assert.Equal(40f, store.ById[control.Id].Value);
+
+        var applied = new List<float?>();
+        var profile = new FanProfile { ControlId = control.Id, SourceId = temp.Id, Mode = FanMode.Curve };
+        new FanController().Tick(new[] { profile }, store, 1, (_, p) => applied.Add(p));
+        Assert.Empty(applied); // never driven: stays automatic instead of following the frozen 70 °C
+        Assert.Contains("automatic", profile.Status);
+    }
+
+    [Fact]
     public async Task Refresh_rate_is_poll_to_poll_not_poll_plus_wait()
     {
         // Each poll takes 300 ms. At 400 ms per poll that's ~7 polls in 2.8 s; the old "poll, then wait 400 ms" gave ~4.

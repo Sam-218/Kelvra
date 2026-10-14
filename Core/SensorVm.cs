@@ -80,6 +80,14 @@ public sealed class SensorVm : ObservableObject
         Level = LevelFor(Type, r.Value);
     }
 
+    /// <summary>The sensor wasn't in the last poll: no value until it's back.</summary>
+    public void Clear()
+    {
+        Value = Min = Max = null;
+        ValueText = MinText = MaxText = "-";
+        Level = 0;
+    }
+
     /// <summary>Fixed limits on the raw value: 70/85 °C for temperatures, 80/95 % for load. Other types never warn.</summary>
     public static int LevelFor(SensorType type, float? value)
     {

@@ -66,22 +66,41 @@ public sealed class PresentMonRunner : IDisposable
         {
             if (_run != null) return;
             var run = new RunState();
-            run.Thread = new Thread(() => Run(run)) { IsBackground = true, Name = "PresentMon reader" };
+            // After a quick off/on the previous generation may still be ending the trace session, which shares our
+            // session name: start only once it's done, or it would end this generation's session too
+            var previous = _windDown;
+            run.Thread = new Thread(() =>
+            {
+                previous.Wait();
+                Run(run);
+            }) { IsBackground = true, Name = "PresentMon reader" };
             _run = run;
             run.Thread.Start();
         }
     }
 
+    /// <summary>The last generation's <see cref="WindDown"/> (under _gate).</summary>
+    private Task _windDown = Task.CompletedTask;
+
     /// <summary>Stops PresentMon and its trace session; the reader thread deletes the extracted exe when it ends.</summary>
-    public void Stop()
+    public void Stop() => StopAsync().GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Like <see cref="Stop"/>, but only the hand-over happens now: a <see cref="Start"/> right after begins a new
+    /// generation instead of finding this one still registered. Ending the trace session (a few seconds) runs in the background.
+    /// </summary>
+    public Task StopAsync()
     {
-        RunState? run;
         lock (_gate)
         {
-            run = _run;
-            if (run == null) return;
+            if (_run is not { } run) return _windDown;
             _run = null;
+            return _windDown = Task.Run(() => WindDown(run));
         }
+    }
+
+    private static void WindDown(RunState run)
+    {
         run.Stopping = true;
         // Ending the ETW session makes PresentMon exit by itself; killing it alone would leave the session running
         StopSession(run.Exe);

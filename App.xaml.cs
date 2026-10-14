@@ -74,6 +74,8 @@ public partial class App : Application
         {
             ReleaseFansQuietly();
             if (Game == null) return;
+            Settings.Save(); // changes still waiting for the debounced save
+            if (Settings.KeepHistory) History.Save(HistoryService.DefaultFile); // otherwise up to 10 min are lost
             try
             {
                 SaveRunningGame();

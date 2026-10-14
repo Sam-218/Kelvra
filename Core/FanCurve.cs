@@ -167,7 +167,7 @@ public sealed class FanController
 
         if (p.Mode == FanMode.Fixed)
         {
-            status = temp is float ft ? $"fixed · {source!.Name} {SensorFormat.Format(source.Type, ft)}" : "fixed";
+            status = temp is float ft ? $"fixed · {source!.Name} {Celsius(ft)}" : "fixed";
             if (temp >= p.CriticalTemp) return 100;
             return Math.Max(p.FixedPercent, p.MinPercent);
         }
@@ -181,7 +181,7 @@ public sealed class FanController
             return null;
         }
         _warned.Remove(p.ControlId);
-        status = $"{source!.Name} {SensorFormat.Format(source.Type, t)}";
+        status = $"{source!.Name} {Celsius(t)}";
         if (t >= p.CriticalTemp) return 100;
 
         // Hysteresis: only follow the curve down once the temperature dropped far enough
@@ -190,4 +190,10 @@ public sealed class FanController
 
         return Math.Clamp(Math.Max(FanCurve.Evaluate(p.Points, t), p.MinPercent), 0, 100);
     }
+
+    /// <summary>
+    /// Always °C, even with °F chosen in Settings: the Fans page (points, curve, critical temperature) works in °C.
+    /// ponytail: °F on the whole Fans page needs the curve editor, point boxes and sliders converted.
+    /// </summary>
+    private static string Celsius(float t) => t.ToString("0", System.Globalization.CultureInfo.InvariantCulture) + " °C";
 }

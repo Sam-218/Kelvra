@@ -118,6 +118,15 @@ public class FanAndOverlayTests : IDisposable
     }
 
     [Fact]
+    public void Fan_status_stays_in_celsius_like_the_rest_of_the_fans_page()
+    {
+        SensorFormat.UseFahrenheit = true;
+        var rig = new Rig(70);
+        rig.Tick();
+        Assert.Contains("70 °C", rig.Profile.Status);
+    }
+
+    [Fact]
     public void Fans_slow_down_gradually_but_speed_up_at_once()
     {
         var rig = new Rig(85); // 100 %

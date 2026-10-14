@@ -194,8 +194,14 @@ public static class StartupManager
 
     private static void ReadFolder(List<StartupItem> items, string folder, RegistryKey hive, string location)
     {
-        if (!Directory.Exists(folder)) return;
-        foreach (var file in Directory.GetFiles(folder))
+        string[] files;
+        try { files = Directory.Exists(folder) ? Directory.GetFiles(folder) : Array.Empty<string>(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Warn($"Reading the startup folder {folder} failed: {ex.Message}"); // the other places are still listed
+            return;
+        }
+        foreach (var file in files)
         {
             string fileName = Path.GetFileName(file);
             if (fileName.Equals("desktop.ini", StringComparison.OrdinalIgnoreCase)) continue;
