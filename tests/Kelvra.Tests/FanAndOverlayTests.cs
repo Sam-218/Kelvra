@@ -255,6 +255,36 @@ public class FanAndOverlayTests : IDisposable
         using var dir = new TempDir();
         Assert.Equal(Accents.Default, AppSettings.Load(dir.File("s.json", "{ \"Accent\": \"Chartreuse\" }"u8.ToArray())).Accent);
         Assert.Equal("Teal", AppSettings.Load(dir.File("t.json", "{ \"Accent\": \"Teal\" }"u8.ToArray())).Accent);
-        Assert.Equal("Amber", Accents.Find(null).Name);
+        Assert.Equal("Graphite", Accents.Find(null).Name);
+    }
+
+    // ---------- fans page: drafts ----------
+
+    [Fact]
+    public void A_fan_draft_is_detached_until_applied_and_knows_when_it_differs()
+    {
+        var live = new FanProfile { ControlId = "c", Mode = FanMode.Curve, SourceId = "cpu", MinPercent = 20 };
+        var draft = live.Draft();
+        Assert.True(draft.SameAs(live));
+
+        draft.Points[1].Percent = 55;
+        draft.Hysteresis = 5;
+        Assert.False(draft.SameAs(live));
+        Assert.Equal(40f, live.Points[1].Percent); // the live curve didn't move
+
+        live.CopyFrom(draft); // Apply
+        Assert.True(live.SameAs(draft));
+        Assert.NotSame(live.Points[1], draft.Points[1]);
+    }
+
+    [Fact]
+    public void Fan_presets_and_slow_down_choices_are_recognised()
+    {
+        Assert.Equal("Balanced", FanCurve.PresetOf(FanCurve.DefaultPoints()));
+        var points = FanCurve.DefaultPoints();
+        points[0].Percent = 31;
+        Assert.Null(FanCurve.PresetOf(points));
+        Assert.Equal("3 °C below, gently", FanCurve.SlowDownLabel(3, 5));
+        Assert.Equal("4 °C below, 7 %/s", FanCurve.SlowDownLabel(4, 7));
     }
 }

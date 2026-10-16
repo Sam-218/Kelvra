@@ -91,7 +91,7 @@ public partial class DiskPage : UserControl
                 CornerRadius = new CornerRadius(2),
                 HorizontalAlignment = HorizontalAlignment.Left,
                 Width = 70 * fraction,
-                Background = (Brush)FindResource(fraction > 0.9 ? "HotBrush" : "AccentBrush"),
+                Background = (Brush)FindResource(fraction > 0.9 ? "CritBrush" : "MutedBrush"),
             });
 
             string label = string.IsNullOrWhiteSpace(drive.VolumeLabel) ? drive.Name.TrimEnd('\\') : $"{drive.Name.TrimEnd('\\')} {drive.VolumeLabel}";

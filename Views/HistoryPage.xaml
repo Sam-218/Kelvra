@@ -67,12 +67,12 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <DockPanel Margin="28,24,28,20">
+    <DockPanel Margin="32,26,32,16">
         <!-- header -->
         <Grid DockPanel.Dock="Top" Margin="0,0,0,14">
             <StackPanel>
-                <TextBlock Text="History" Style="{StaticResource H1}" />
-                <TextBlock Text="Up to 24 hours: every second for the last hour, one-minute averages before that. Hover a graph for exact values."
+                <TextBlock Text="Live graphs" Style="{StaticResource H1}" />
+                <TextBlock Text="Up to 24 hours: every second for the last hour, one-minute averages before that. Hover a graph for exact values. Days, weeks and months are under Reports."
                            Style="{StaticResource Muted}" Margin="0,4,0,0" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
@@ -90,7 +90,7 @@
                 </Border>
                 <Button x:Name="RecordButton" Margin="10,0,0,0" Click="Record_Click" ToolTip="Save the graphs you're viewing to a CSV file" AutomationProperties.Name="Record CSV">
                     <StackPanel Orientation="Horizontal">
-                        <Ellipse Width="10" Height="10" Fill="{DynamicResource HotBrush}" Margin="0,0,8,0" />
+                        <Ellipse Width="10" Height="10" Fill="{DynamicResource DangerBrush}" Margin="0,0,8,0" />
                         <TextBlock x:Name="RecordText" Text="Record CSV" />
                     </StackPanel>
                 </Button>
@@ -116,8 +116,6 @@
                     <RadioButton x:Name="ModeAll" Style="{StaticResource Segment}" Content="All" GroupName="Mode" Checked="Mode_Checked" />
                     <RadioButton x:Name="ModeCategory" Style="{StaticResource Segment}" Content="Categories" GroupName="Mode" Checked="Mode_Checked" />
                     <RadioButton x:Name="ModeSelected" Style="{StaticResource Segment}" Content="Selected" GroupName="Mode" Checked="Mode_Checked" />
-                    <RadioButton x:Name="ModeGames" Style="{StaticResource Segment}" Content="Game sessions" GroupName="Mode" Checked="Mode_Checked"
-                                 ToolTip="FPS summaries of the games you played and your benchmark runs" />
                 </StackPanel>
             </Border>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
@@ -139,37 +137,6 @@
         <Grid>
             <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto">
                 <ItemsControl x:Name="Charts" ItemsPanel="{StaticResource CardPanel}" ItemTemplate="{StaticResource SmallCard}" />
-            </ScrollViewer>
-            <!-- game sessions -->
-            <ScrollViewer x:Name="SessionsScroller" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
-                <ItemsControl x:Name="SessionsList" Focusable="False">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="{x:Type local:GameSessionSummary}">
-                            <Border Style="{StaticResource Card}" Margin="0,0,0,10" Padding="16,12">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <Border Width="36" Height="36" CornerRadius="6" Background="{DynamicResource AccentSoftBrush}" VerticalAlignment="Top">
-                                        <TextBlock Text="&#xE7FC;" Style="{StaticResource Icon}" FontSize="17" HorizontalAlignment="Center"
-                                                   Foreground="{DynamicResource AccentBrush}" />
-                                    </Border>
-                                    <StackPanel Grid.Column="1" Margin="14,0,12,0">
-                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Text="{Binding When}" Style="{StaticResource Muted}" />
-                                        <TextBlock Text="{Binding FpsLine}" Margin="0,6,0,0" FontSize="14" />
-                                        <TextBlock Text="{Binding DetailLine}" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,2,0,0" />
-                                    </StackPanel>
-                                    <Button Grid.Column="2" Content="Open frames CSV" VerticalAlignment="Center" Click="OpenSessionCsv_Click"
-                                            Visibility="{Binding HasCsv, Converter={StaticResource BoolToVis}}"
-                                            ToolTip="Every frame of this benchmark run, for Excel or frametime tools" />
-                                </Grid>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
             </ScrollViewer>
             <TextBlock x:Name="EmptyText" Style="{StaticResource Muted}" FontSize="14" HorizontalAlignment="Center"
                        VerticalAlignment="Center" TextAlignment="Center" Visibility="Collapsed" />

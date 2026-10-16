@@ -253,6 +253,7 @@ public static class FileKinds
     }
 }
 
+/// <summary>Byte counts for people: "850 B", "12.4 MB", "1.93 GB" (powers of 1024, three significant digits, any culture).</summary>
 public static class ByteFormat
 {
     private static readonly string[] Units = { "B", "KB", "MB", "GB", "TB", "PB" };

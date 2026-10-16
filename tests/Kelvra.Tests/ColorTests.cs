@@ -7,7 +7,7 @@ public class ColorTests
 {
     private static Color C(string hex) => ColorUtil.Parse(hex, Colors.Magenta);
 
-    private static readonly Color DarkPanel = C("#13161B"), White = Colors.White;
+    private static readonly Color DarkPanel = C("#14171B"), White = Colors.White;
 
     [Theory]
     [InlineData("#FF0000")]
@@ -81,12 +81,26 @@ public class ColorTests
         Assert.Equal(C("#2DD4BF"), Accents.ColorOf("Teal"));
     }
 
+    [Fact]
+    public void Graphite_buttons_are_the_text_colour_and_readable_on_both_themes()
+    {
+        foreach (bool dark in new[] { true, false })
+        {
+            var (line, fill, text, _) = Accents.Shades("Graphite", dark);
+            var panel = dark ? DarkPanel : White;
+            Assert.Equal(line, fill); // white buttons on graphite, near-black ones on paper: no colour of their own
+            Assert.True(ColorMath.Contrast(line, panel) >= 4.5);
+            Assert.True(ColorMath.Contrast(text, fill) >= 4.5);
+        }
+        Assert.Equal("Graphite", Accents.Default);
+    }
+
     [Theory]
     [InlineData("#12AB34", "#12AB34")]
     [InlineData("Teal", "Teal")]
-    [InlineData("Chartreuse", "Amber")] // not a preset, not a colour
-    [InlineData("#12AB3", "Amber")]
-    [InlineData("#8012AB34", "Amber")]  // no see-through accents
+    [InlineData("Chartreuse", "Graphite")] // not a preset, not a colour
+    [InlineData("#12AB3", "Graphite")]
+    [InlineData("#8012AB34", "Graphite")]  // no see-through accents
     public void Accent_setting_takes_any_rgb_colour(string saved, string loaded)
     {
         using var dir = new TempDir();

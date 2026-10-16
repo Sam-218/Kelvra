@@ -15,6 +15,8 @@ public sealed class GameSession
     }
 
     public int ProcessId { get; }
+    /// <summary>The exe's name without ".exe" ("DyingLightGame_x64_rwdi"), to match it against crash records.</summary>
+    public string Exe { get; init; } = "";
     /// <summary>Readable name ("Dying Light 2"), see <see cref="GameRules.DisplayName"/>.</summary>
     public string Name { get; }
     public FrameStats Stats { get; }
@@ -212,7 +214,7 @@ public sealed class GameMonitor : IDisposable
             if (snap.Fps is double fps && fps >= MinFps && _foreground.Exe.Length > 0) SeenApps.Add(_foreground.Exe);
             if (snap.Fps >= MinFps && snap.SessionLength >= SteadyFor &&
                 GameRules.LooksLikeGame(_foreground, _settings, IsFullscreen(_foregroundHwnd), snap.PresentMode))
-                Begin(new GameSession(_candidatePid, GameRules.DisplayName(_foreground), candidate));
+                Begin(new GameSession(_candidatePid, GameRules.DisplayName(_foreground), candidate) { Exe = _foreground.Exe });
         }
 
         if (_active != null && _foregroundPid == _active.ProcessId) _gameHwnd = _foregroundHwnd; // follows a re-created game window

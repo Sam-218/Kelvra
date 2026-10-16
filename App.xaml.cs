@@ -7,8 +7,9 @@ using System.Windows.Threading;
 namespace Kelvra;
 
 /// <summary>
-/// Entry point and service hub: loads settings, creates the shared services (sensors, overlays, history,
-/// alerts, CSV logger, tray icon) and runs the sensor polling loop. Pages reach them via <see cref="Current"/>.
+/// Entry point and service hub: loads settings, creates the shared services (sensors, overlays, live graphs, alerts,
+/// CSV logger, tray icon, and the long-term history with its crash and change watchers) and runs the sensor polling
+/// loop. Pages reach them via <see cref="Current"/>.
 /// </summary>
 public partial class App : Application
 {
@@ -34,6 +35,14 @@ public partial class App : Application
     /// <summary>Fan curves (Fans page). Runs after every poll.</summary>
     public FanController Fans { get; } = new();
     private readonly System.Diagnostics.Stopwatch _fanClock = System.Diagnostics.Stopwatch.StartNew();
+    private readonly PollScheduler _scheduler = new();
+
+    /// <summary>Long-term history (Reports, Crashes, Changes); null if history.db couldn't be opened.</summary>
+    public HistoryRecorder? Recorder { get; private set; }
+    /// <summary>Reads crashes from the Windows event logs into the history.</summary>
+    public CrashWatcher? Crashes { get; private set; }
+    /// <summary>Notices driver, Windows, app and startup changes.</summary>
+    public ChangeWatcher? Changes { get; private set; }
 
     private void ReleaseFansQuietly()
     {
@@ -47,7 +56,8 @@ public partial class App : Application
 
         // --- Single instance ---
         bool afterUpdate = e.Args.Contains(Updater.AfterUpdateArg);
-        _mutex = new Mutex(true, "Kelvra.SingleInstance", out bool isFirst);
+        // A development copy with its own data folder may run next to the real Kelvra
+        _mutex = new Mutex(true, AppSettings.CustomDir ? "Kelvra.SingleInstance.Dev" : "Kelvra.SingleInstance", out bool isFirst);
         if (!isFirst && afterUpdate) isFirst = WaitForPreviousInstance(_mutex);
         if (!isFirst)
         {
@@ -73,6 +83,7 @@ public partial class App : Application
         SessionEnding += (_, _) => // sign-out / shutdown: Windows ends Kelvra without Quit()
         {
             ReleaseFansQuietly();
+            Recorder?.Stop();
             if (Game == null) return;
             Settings.Save(); // changes still waiting for the debounced save
             if (Settings.KeepHistory) History.Save(HistoryService.DefaultFile); // otherwise up to 10 min are lost
@@ -100,6 +111,8 @@ public partial class App : Application
         WatchAlertRules();
 
         Sensors = new SensorStore();
+        Sensors.PlanPoll = PlanPoll;
+        OpenHistory();
         Game = new GameMonitor(Settings);
         bool gameSensorsShown = false;
         Sensors.ExtraReadings = () =>
@@ -170,9 +183,10 @@ public partial class App : Application
             double seconds = _fanClock.Elapsed.TotalSeconds;
             _fanClock.Restart();
             Fans.Tick(Settings.Fans, Sensors, seconds, Sensors.RequestFan);
+            Recorder?.Sample(Sensors, Game.ActiveGame != null, DateTime.UtcNow);
         };
         Sensors.Updated += TrackGameTemperatures;
-        Game.GameEnded += SaveGameSession;
+        Game.GameEnded += game => _ = SaveEndedGameAsync(game);
         Game.GameStarted += game =>
         {
             // Only for people who use the gaming overlay; everyone else isn't interrupted in their games
@@ -192,6 +206,76 @@ public partial class App : Application
         // Runs until Quit(); the delegate re-reads the refresh rate so Settings changes apply on the next poll
         await Sensors.RunAsync(() => Settings.RefreshMs, _cts.Token);
     }
+
+    /// <summary>
+    /// Which devices the next poll reads (see <see cref="PollScheduler"/>): everything while the window, mini mode or a
+    /// CSV log is open; otherwise what overlays, alerts and fan curves use, plus what the history records.
+    /// </summary>
+    private Func<string, LibreHardwareMonitor.Hardware.HardwareType, bool> PlanPoll()
+    {
+        bool everything = MainWindowShown || Mini != null || Logger.IsRecording;
+        var live = PollScheduler.DevicesOf(
+            Overlays.ShownSensorIds
+                .Concat(Settings.Alerts.Where(a => a.Enabled).Select(a => a.SensorId))
+                .Concat(Settings.Fans.Where(f => f.Mode != FanMode.Auto).SelectMany(f => new[] { f.ControlId, f.SourceId })),
+            Sensors.ById);
+        return _scheduler.Plan(everything, live, Recorder?.Devices ?? new HashSet<string>(), DateTime.UtcNow);
+    }
+
+    /// <summary>
+    /// Opens history.db and starts the crash and change watchers. A file that can't be opened (damaged) is set aside and
+    /// a new one started; if that fails too, Kelvra runs without long-term history.
+    /// </summary>
+    private void OpenHistory()
+    {
+        HistoryDb? db = null;
+        for (int attempt = 0; attempt < 2 && db == null; attempt++)
+        {
+            try
+            {
+                db = HistoryDb.Open(HistoryDb.DefaultFile);
+            }
+            catch (Exception ex) when (ex is Microsoft.Data.Sqlite.SqliteException or IOException or UnauthorizedAccessException)
+            {
+                Log.Error("Opening history.db", ex);
+                if (attempt > 0 || !File.Exists(HistoryDb.DefaultFile)) break;
+                try { File.Move(HistoryDb.DefaultFile, $"{HistoryDb.DefaultFile}.bad-{DateTime.Now:yyyyMMdd-HHmmss}"); }
+                catch (Exception moveError) when (moveError is IOException or UnauthorizedAccessException) { break; }
+            }
+        }
+        if (db == null) return;
+
+        Recorder = new HistoryRecorder(db, Settings) { AppliedDuty = Fans.Applied };
+        Recorder.FanStopped += (title, message) =>
+        {
+            Tray.Notify(title, message);
+            if (Settings.AlertSound) SystemSounds.Exclamation.Play();
+        };
+        ApplyHistorySettings();
+        Crashes = new CrashWatcher(db);
+        Crashes.Added += found => Dispatcher.BeginInvoke(() => NotifyCrashes(found));
+        Changes = new ChangeWatcher(db);
+        Crashes.Start();
+        Changes.Start();
+    }
+
+    /// <summary>
+    /// Tells about a blue screen, sudden shutdown or graphics driver reset of the last day (app crashes only show on the
+    /// Crashes page: too many to notify about). At most two notifications at a time.
+    /// </summary>
+    private void NotifyCrashes(IReadOnlyList<CrashRecord> found)
+    {
+        long since = HistoryDb.Unix(DateTime.Now.AddDays(-1));
+        foreach (var c in found.Where(c => c.Ts >= since && c.Kind is CrashKinds.BlueScreen or CrashKinds.Shutdown or CrashKinds.DriverReset)
+                               .OrderByDescending(c => c.Ts).Take(2))
+        {
+            var ex = CrashExplainer.Explain(c);
+            Tray?.Notify(ex.Title, $"{ex.Reason} Kelvra → Crashes has the details.");
+        }
+    }
+
+    /// <summary>Applies Settings → History (recording on/off, the per-app network trace).</summary>
+    public void ApplyHistorySettings() => Recorder?.Apps.SetNetwork(Settings.LongHistory && Settings.TrackAppNetwork);
 
     /// <summary>Once the sensor list exists: names overlay items and gives first-time users the "Essentials" overlay.</summary>
     private void OnFirstLoad()
@@ -266,18 +350,51 @@ public partial class App : Application
         }
     }
 
-    /// <summary>On exit or Windows sign-out/shutdown: keep the running benchmark and game session.</summary>
+    /// <summary>On exit or Windows sign-out/shutdown: keep the running benchmark and game session, and ones still being checked.</summary>
     private void SaveRunningGame()
     {
         if (Game.StopBenchmark() is { } run) SaveBenchmark(run);
         if (Game.ActiveGame is { } game) SaveGameSession(game);
+        foreach (var (_, summary) in _endingGames) SaveSummary(summary);
+        _endingGames.Clear();
+    }
+
+    private static GameSessionSummary? Summary(GameSession game)
+    {
+        var summary = GameSessionSummary.From(game.Name, game.Started, game.Stats, game.MaxCpuTemp, game.MaxGpuTemp, exe: game.Exe);
+        return TimeSpan.FromSeconds(summary.Seconds) < GameSessionLog.MinLength ? null : summary;
     }
 
     private void SaveGameSession(GameSession game)
     {
-        var summary = GameSessionSummary.From(game.Name, game.Started, game.Stats, game.MaxCpuTemp, game.MaxGpuTemp);
-        if (TimeSpan.FromSeconds(summary.Seconds) < GameSessionLog.MinLength) return;
-        SaveSummary(summary);
+        if (Summary(game) is { } summary) SaveSummary(summary);
+    }
+
+    /// <summary>Game sessions waiting for the crash check (saved as they are if Kelvra exits first).</summary>
+    private readonly Dictionary<GameSession, GameSessionSummary> _endingGames = new();
+
+    /// <summary>
+    /// A game closed: Windows logs a crash a moment after the process ends, so wait a few seconds, read the event log, and
+    /// save the session marked as crashed if the game's exe crashed or froze while it ran.
+    /// </summary>
+    private async Task SaveEndedGameAsync(GameSession game)
+    {
+        if (Summary(game) is not { } summary) return;
+        if (Crashes == null || Recorder == null || game.Exe.Length == 0)
+        {
+            SaveSummary(summary);
+            return;
+        }
+        _endingGames[game] = summary;
+        await Task.Delay(TimeSpan.FromSeconds(8));
+        await Crashes.ScanAsync();
+        long from = HistoryDb.Unix(game.Started), to = HistoryDb.Unix(DateTime.Now) + 1;
+        bool crashed = await Recorder.ReadAsync(db => db.Crashes(from, to).Any(c =>
+            c.Kind is CrashKinds.AppCrash or CrashKinds.AppHang &&
+            Path.GetFileNameWithoutExtension(c.App).Equals(game.Exe, StringComparison.OrdinalIgnoreCase)));
+        if (!_endingGames.Remove(game)) return; // saved already, while quitting
+        SaveSummary(summary with { Crashed = crashed });
+        if (crashed) Tray.Notify($"{game.Name} crashed", "Kelvra → Crashes shows what Windows recorded about it.");
     }
 
     /// <summary>The benchmark shortcut: starts recording the running game, or stops and saves the run.</summary>
@@ -315,10 +432,10 @@ public partial class App : Application
         string length = summary.When.Split(" · ").Last();
         if (!IsQuitting) OsdToast.Notify("■ Benchmark stopped and saved", $"{summary.FpsLine} · {length}", OsdToast.Green, 6);
 
-        // The summary first (History hides the CSV button until the file exists), then the frames in the background.
+        // The summary first (the Games page hides the CSV button until the file exists), then the frames in the background.
         // Complete: no frames are added once the run is stopped.
         SaveSummary(summary);
-        Tray.Notify("Benchmark saved", $"{summary.FpsLine} · {length}\nDetails: History → Game sessions.");
+        Tray.Notify("Benchmark saved", $"{summary.FpsLine} · {length}\nDetails: Kelvra → Games.");
         var write = Task.Run(() =>
         {
             try
@@ -352,7 +469,7 @@ public partial class App : Application
         }
     }
 
-    /// <summary>A session or benchmark was added to History → Game sessions.</summary>
+    /// <summary>A session or benchmark was added to the Games page.</summary>
     public event Action? GameSessionsChanged;
 
     /// <summary>After an update the old Kelvra is still closing: wait for it to let go of the single-instance lock.</summary>
@@ -539,6 +656,10 @@ public partial class App : Application
         _cts.Cancel();
         ReleaseFansQuietly();
         Logger.Stop();
+        Crashes?.Dispose();
+        Changes?.Dispose();
+        Recorder?.Stop();
+        Recorder?.Dispose();
         bool miniOpen = Mini != null;
         Mini?.Close();
         Settings.MiniOpen = miniOpen; // reopen it next time

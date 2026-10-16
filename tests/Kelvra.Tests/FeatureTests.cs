@@ -304,8 +304,35 @@ public class FeatureTests
         };
         var panel = Overview.Panels(sensors)[0];
         panel.Update(sensors);
-        Assert.Equal(("4090", "4080 – 4100"), (panel.Stats[2].Value, panel.Stats[2].Range));
+        // 4090 MHz average of the real cores, shown in GHz as Kelvra 2's Overview does (the effective clocks would drag it to ~2.2)
+        Assert.Equal(("4.1", "4.1 – 4.1", "GHz"), (panel.Stats[2].Value, panel.Stats[2].Range, panel.Stats[2].Unit));
     }
+
+    [Fact]
+    public void A_device_panel_shows_its_heat_and_the_headroom_to_its_limit()
+    {
+        var temp = Data.Sensor("/cpu/0/temperature/0", SensorType.Temperature, 61, "Core (Tctl/Tdie)");
+        var sensors = new[] { temp, Data.Sensor("/cpu/0/load/0", SensorType.Load, 8, "CPU Total") };
+        var panel = Overview.Panels(sensors)[0];
+        panel.Update(sensors);
+        panel.UpdateHeat(sensors.ToDictionary(s => s.Id), new HistoryService(), TimeSpan.FromHours(1), Array.Empty<AlertRule>());
+        Assert.Equal(("61", Heat.Fine, "Normal"), (panel.Hero, panel.Heat, panel.StateWord));
+        Assert.Equal("34° to the 95 °C limit", panel.HeadroomText);
+
+        // The user's own alert limit wins, and reaching it is critical
+        var alert = new AlertRule { SensorId = temp.Id, Threshold = 60 };
+        panel.UpdateHeat(sensors.ToDictionary(s => s.Id), new HistoryService(), TimeSpan.FromHours(1), new[] { alert });
+        Assert.Equal((Heat.Critical, "At the 60 °C limit"), (panel.Heat, panel.HeadroomText));
+    }
+
+    [Theory]
+    [InlineData(25, Heat.Cold)]
+    [InlineData(40, Heat.Fine)]
+    [InlineData(69.9, Heat.Fine)]
+    [InlineData(70, Heat.Warm)]
+    [InlineData(82, Heat.Hot)]
+    [InlineData(92, Heat.Critical)]
+    public void Temperatures_fall_into_the_thermal_scale(double celsius, Heat expected) => Assert.Equal(expected, Thermal.Of(celsius));
 
     [Fact]
     public void Diagnostics_hide_the_user_name()

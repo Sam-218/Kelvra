@@ -6,6 +6,7 @@ using Microsoft.Win32.SafeHandles;
 
 namespace Kelvra;
 
+/// <summary>One copy in a group of identical files; <see cref="Selected"/> marks it for the Recycle Bin.</summary>
 public sealed class DuplicateFile : ObservableObject
 {
     private bool _selected;
@@ -26,6 +27,7 @@ public sealed class DuplicateFile : ObservableObject
     public bool Selected { get => _selected; set => Set(ref _selected, value); }
 }
 
+/// <summary>Files with identical content (same size and SHA-256); all but one copy is space that could be freed.</summary>
 public sealed class DuplicateGroup
 {
     public DuplicateGroup(long size, List<DuplicateFile> files)

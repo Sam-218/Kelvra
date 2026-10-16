@@ -109,6 +109,30 @@ public class GamingTests
     }
 
     [Fact]
+    public void Selecting_a_percentile_gives_what_sorting_would()
+    {
+        var rnd = new Random(3);
+        for (int round = 0; round < 2000; round++)
+        {
+            int n = rnd.Next(1, 3000);
+            // Mixed shapes: random, few distinct values (steady frame times), already sorted, reversed
+            var values = Enumerable.Range(0, n).Select(_ => (round % 4) switch
+            {
+                0 => rnd.NextDouble() * 50,
+                1 => 4 + rnd.Next(3) * 0.5,
+                _ => 0.0,
+            }).ToArray();
+            if (round % 4 == 2) for (int i = 0; i < n; i++) values[i] = i * 0.1;
+            if (round % 4 == 3) for (int i = 0; i < n; i++) values[i] = (n - i) * 0.1;
+            int k = rnd.Next(n);
+            var sorted = values.Order().ToArray();
+            FrameStats.Select(values, k);
+            Assert.Equal(sorted[k], values[k]);
+            Assert.All(values[..k], v => Assert.True(v <= values[k]));
+        }
+    }
+
+    [Fact]
     public void Spikes_count_as_stutters_but_steady_or_smoothly_changing_rates_dont()
     {
         long clock = 100_000;
@@ -199,11 +223,11 @@ public class GamingTests
         Assert.Equal((117972.5012, 13.3, 10.9), (f.TimeMs, f.FrameTimeMs, f.GpuBusyMs!.Value));
 
         // A zero-length present (other apps write these) isn't a frame, but the line itself is fine: no log noise
-        string zero = "claude.exe,7172,0x1F2B7282400,DXGI,0,0,0,Composed: Flip,117972.5012,NA,0.00000000000000,NA,0.16990000000000," +
+        string zero = "discord.exe,7172,0x1F2B7282400,DXGI,0,0,0,Composed: Flip,117972.5012,NA,0.00000000000000,NA,0.16990000000000," +
                       "1.19020000000000,NA,117979.8228,0.1699,0.0000,0.1699,0.0000,0.8743,0.8648,0.0095,NA,NA,NA,NA,NA";
         Assert.Null(csv.Parse(zero));
         Assert.True(csv.IsComplete(zero));
-        Assert.False(csv.IsComplete("claude.exe,7172"));
+        Assert.False(csv.IsComplete("discord.exe,7172"));
     }
 
     [Fact]

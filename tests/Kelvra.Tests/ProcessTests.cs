@@ -19,8 +19,8 @@ public class ProcessTests
         var roots = Roots(new[]
         {
             P(9692, 1, "explorer.exe", created: 1),
-            P(3396, 9692, "claude.exe", created: 10),   // the app, opened from the Start menu
-            P(16156, 3396, "claude.exe", created: 11),  // Electron renderer
+            P(3396, 9692, "spotify.exe", created: 10),   // the app, opened from the Start menu
+            P(16156, 3396, "spotify.exe", created: 11),  // Chromium renderer
             P(500, 3396, "powershell.exe", created: 12), // a shell the app started
             P(501, 500, "conhost.exe", created: 13),     // ...and its console
             P(7000, 9692, "Discord.exe", created: 20),  // another app from the shell

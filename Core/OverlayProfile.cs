@@ -28,6 +28,7 @@ public sealed class OverlayItem : ObservableObject
     private bool _showBar;
     private bool _showGraph;
     private bool _hideLabel;
+    private bool _hidden;
     private string? _valueColor;
     private int _decimals = -1;
     private float? _warnAt, _hotAt;
@@ -45,6 +46,10 @@ public sealed class OverlayItem : ObservableObject
     public bool ShowGraph { get => _showGraph; set => Set(ref _showGraph, value); }
     /// <summary>Only the value (e.g. a big clock).</summary>
     public bool HideLabel { get => _hideLabel; set => Set(ref _hideLabel, value); }
+    /// <summary>Switched off on the Overlays page: kept with its settings, but not shown.</summary>
+    public bool Hidden { get => _hidden; set { Set(ref _hidden, value); OnPropertyChanged(nameof(Shown)); } }
+    /// <summary>The editor's switch (the opposite of <see cref="Hidden"/>).</summary>
+    [JsonIgnore] public bool Shown { get => !_hidden; set => Hidden = !value; }
     /// <summary>"#RRGGBB" for this value only; null = the overlay's value colour.</summary>
     public string? ValueColor { get => _valueColor; set => Set(ref _valueColor, ColorUtil.IsValidHex(value) ? value!.Trim() : null); }
     /// <summary>-1 = Kelvra's default precision for the sensor type, else 0–3 decimal places.</summary>
@@ -114,6 +119,7 @@ public sealed class OverlayProfile : ObservableObject
     private int _graphSeconds = 60;
     private int _graphWidth = 60;
     private bool _showOnlyInGames;
+    private bool _onDesktop;
     private OverlayAnchor _anchor = OverlayAnchor.Custom;
     private int _edgeMargin = 20;
     private string _monitor = "";
@@ -192,6 +198,8 @@ public sealed class OverlayProfile : ObservableObject
     // ----- position -----
     /// <summary>A gaming overlay: shown only while a game is in the foreground (and while unlocked, to place it).</summary>
     public bool ShowOnlyInGames { get => _showOnlyInGames; set => Set(ref _showOnlyInGames, value); }
+    /// <summary>A desktop widget: behind other windows instead of always on top (see <see cref="OverlayWindow"/>).</summary>
+    public bool OnDesktop { get => _onDesktop; set => Set(ref _onDesktop, value); }
     public OverlayAnchor Anchor { get => _anchor; set => Set(ref _anchor, Enum.IsDefined(value) ? value : OverlayAnchor.Custom); }
     /// <summary>Distance from the screen edge when anchored, in px.</summary>
     public int EdgeMargin { get => _edgeMargin; set => Set(ref _edgeMargin, Math.Clamp(value, 0, 400)); }
@@ -210,7 +218,30 @@ public sealed class OverlayProfile : ObservableObject
         }
     }
 
-    [JsonIgnore] public string Summary => Items.Count == 1 ? "1 sensor" : $"{Items.Count} sensors";
+    /// <summary>"While a game is in front", "Top-right · always on top", "Behind your windows", "4 sensors".</summary>
+    [JsonIgnore]
+    public string Summary =>
+        ShowOnlyInGames ? "While a game is in front"
+        : OnDesktop ? "Behind your windows"
+        : Anchor != OverlayAnchor.Custom ? $"{AnchorName(Anchor)} · always on top"
+        : Items.Count == 1 ? "1 sensor" : $"{Items.Count} sensors";
+
+    /// <summary>"Top-right", "Bottom-centre"…</summary>
+    public static string AnchorName(OverlayAnchor a) => a switch
+    {
+        OverlayAnchor.TopLeft => "Top-left",
+        OverlayAnchor.TopCenter => "Top-centre",
+        OverlayAnchor.TopRight => "Top-right",
+        OverlayAnchor.MiddleLeft => "Middle-left",
+        OverlayAnchor.MiddleRight => "Middle-right",
+        OverlayAnchor.BottomLeft => "Bottom-left",
+        OverlayAnchor.BottomCenter => "Bottom-centre",
+        OverlayAnchor.BottomRight => "Bottom-right",
+        _ => "Free",
+    };
+
+    /// <summary>The items that are switched on, in order.</summary>
+    [JsonIgnore] public List<OverlayItem> ShownItems => Items.Where(i => !i.Hidden).ToList();
 
     /// <summary>
     /// Warning limits (raw units) for an item: its own, else the overlay's for temperature/load, and 60/30 for FPS;
@@ -256,6 +287,7 @@ public sealed class OverlayProfile : ObservableObject
     {
         base.OnPropertyChanged(name);
         Changed?.Invoke(this, name ?? "");
+        if (name is nameof(ShowOnlyInGames) or nameof(OnDesktop) or nameof(Anchor)) base.OnPropertyChanged(nameof(Summary));
     }
 
     // A hand-edited or imported file can contain null items: skip them here (the importer drops them)
@@ -283,7 +315,7 @@ public sealed class OverlayProfile : ObservableObject
     {
         // Name resolution and folding the editor row aren't user changes to the overlay
         if (e.PropertyName is nameof(OverlayItem.SensorName) or nameof(OverlayItem.HardwareName) or nameof(OverlayItem.IsExpanded)
-            or nameof(OverlayItem.ValueColorText)) return;
+            or nameof(OverlayItem.ValueColorText) or nameof(OverlayItem.Shown)) return;
         Changed?.Invoke(this, nameof(Items));
     }
 }

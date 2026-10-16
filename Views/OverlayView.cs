@@ -78,7 +78,7 @@ public sealed class OverlayView : Border
             });
         }
 
-        UIElement content = _p.Items.Count == 0
+        UIElement content = _p.ShownItems.Count == 0
             ? new TextBlock { Text = $"{_p.Name}: no sensors yet.\nAdd some in Kelvra → Overlays.", Foreground = labelBrush }
             : _p.Layout switch
             {
@@ -153,7 +153,7 @@ public sealed class OverlayView : Border
         double valueSize = _p.FontSize * _p.ValueScale;
         string? lastGroup = null;
 
-        foreach (var item in _p.Items)
+        foreach (var item in _p.ShownItems)
         {
             string group = GroupOf(item);
             if (_p.ShowHeaders && group != lastGroup)
@@ -236,7 +236,7 @@ public sealed class OverlayView : Border
         double valueSize = _p.FontSize * _p.ValueScale;
         string? lastGroup = null;
 
-        foreach (var item in _p.Items)
+        foreach (var item in _p.ShownItems)
         {
             string group = GroupOf(item);
             if (_p.ShowHeaders && group != lastGroup)
@@ -305,14 +305,15 @@ public sealed class OverlayView : Border
     private UIElement BuildGrid(Brush labelBrush)
     {
         var grid = new Grid();
-        int columns = Math.Min(_p.Columns, Math.Max(1, _p.Items.Count));
+        var items = _p.ShownItems;
+        int columns = Math.Min(_p.Columns, Math.Max(1, items.Count));
         for (int c = 0; c < columns; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         double valueSize = _p.FontSize * _p.ValueScale * 1.35;
         double gap = _p.ItemSpacing;
 
-        for (int i = 0; i < _p.Items.Count; i++)
+        for (int i = 0; i < items.Count; i++)
         {
-            var item = _p.Items[i];
+            var item = items[i];
             int r = i / columns, c = i % columns;
             if (c == 0) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 

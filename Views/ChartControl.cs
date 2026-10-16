@@ -116,7 +116,9 @@ public sealed class ChartControl : FrameworkElement
 
         var line = TryFindResource("LineBrush") as Brush ?? Brushes.Gray;
         var muted = TryFindResource("MutedBrush") as Brush ?? Brushes.Gray;
+        // Frozen: WPF then doesn't watch these for changes (they're made anew for every redraw, once a second per chart)
         var gridPen = new Pen(line, 1) { DashStyle = DashStyles.Dash };
+        gridPen.Freeze();
         double dip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
 
         // Y range (in display units)
@@ -190,8 +192,11 @@ public sealed class ChartControl : FrameworkElement
 
         var areaBrush = new LinearGradientBrush(Color.FromArgb(0x60, item.Color.R, item.Color.G, item.Color.B),
                                                 Color.FromArgb(0x05, item.Color.R, item.Color.G, item.Color.B), 90);
+        areaBrush.Freeze();
+        var linePen = new Pen(item.Brush, 1.8) { LineJoin = PenLineJoin.Round };
+        linePen.Freeze();
         dc.DrawGeometry(areaBrush, null, fill);
-        dc.DrawGeometry(null, new Pen(item.Brush, 1.8) { LineJoin = PenLineJoin.Round }, stroke);
+        dc.DrawGeometry(null, linePen, stroke);
 
         if (_hoverX is double hx) DrawHover(dc, item, pts, hx, X, Y, muted, dip);
     }

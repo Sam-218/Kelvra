@@ -52,6 +52,31 @@ public sealed class FanProfile : ObservableObject
 
     /// <summary>What the controller is doing right now ("62 % · CPU 58 °C"), for the page.</summary>
     [JsonIgnore] public string Status { get => _status; set => Set(ref _status, value); }
+
+    /// <summary>
+    /// Takes over every setting of <paramref name="other"/> (points copied, not shared): the Fans page edits a draft and
+    /// copies it onto the live profile on Apply, or back on Revert.
+    /// </summary>
+    public void CopyFrom(FanProfile other)
+    {
+        (Mode, FixedPercent, SourceId, MinPercent) = (other.Mode, other.FixedPercent, other.SourceId, other.MinPercent);
+        (Hysteresis, RampDown, CriticalTemp) = (other.Hysteresis, other.RampDown, other.CriticalTemp);
+        Points = new ObservableCollection<FanPoint>(other.Points.Select(p => new FanPoint { Temp = p.Temp, Percent = p.Percent }));
+    }
+
+    /// <summary>A detached copy (same fan output) to edit.</summary>
+    public FanProfile Draft()
+    {
+        var draft = new FanProfile { ControlId = ControlId };
+        draft.CopyFrom(this);
+        return draft;
+    }
+
+    /// <summary>Every setting the same as <paramref name="other"/>'s (points in temperature order).</summary>
+    public bool SameAs(FanProfile other) =>
+        (Mode, FixedPercent, SourceId, MinPercent, Hysteresis, RampDown, CriticalTemp)
+        == (other.Mode, other.FixedPercent, other.SourceId, other.MinPercent, other.Hysteresis, other.RampDown, other.CriticalTemp)
+        && Points.OrderBy(p => p.Temp).Select(p => (p.Temp, p.Percent)).SequenceEqual(other.Points.OrderBy(p => p.Temp).Select(p => (p.Temp, p.Percent)));
 }
 
 /// <summary>Curve maths and the defaults, kept free of hardware so they're easy to test.</summary>
@@ -68,6 +93,35 @@ public static class FanCurve
     };
 
     internal static float Clamp(float v, float lo, float hi, float fallback) => float.IsFinite(v) ? Math.Clamp(v, lo, hi) : fallback;
+
+    /// <summary>The curves to start from (°C → %).</summary>
+    public static readonly (string Name, (float Temp, float Percent)[] Points)[] Presets =
+    {
+        ("Silent", new[] { (40f, 20f), (60f, 35f), (75f, 60f), (88f, 100f) }),
+        ("Balanced", DefaultPoints().Select(p => (p.Temp, p.Percent)).ToArray()),
+        ("Performance", new[] { (30f, 40f), (50f, 60f), (65f, 85f), (78f, 100f) }),
+    };
+
+    /// <summary>The preset a curve is exactly, or null.</summary>
+    public static string? PresetOf(IEnumerable<FanPoint> points)
+    {
+        var pts = points.OrderBy(p => p.Temp).Select(p => (p.Temp, p.Percent)).ToList();
+        return Presets.FirstOrDefault(p => p.Points.SequenceEqual(pts)).Name;
+    }
+
+    /// <summary>"Slow down gently": how far the temperature must drop and how fast the fan may then slow down.</summary>
+    public static readonly (string Label, float Hysteresis, float RampDown)[] SlowDowns =
+    {
+        ("Right away", 0, 100),
+        ("2 °C below, quickly", 2, 10),
+        ("3 °C below, gently", 3, 5),
+        ("5 °C below, slowly", 5, 2),
+        ("8 °C below, very slowly", 8, 1),
+    };
+
+    /// <summary>The label for a profile's slow-down settings: a preset's, else "4 °C below, 7 %/s".</summary>
+    public static string SlowDownLabel(float hysteresis, float rampDown) =>
+        SlowDowns.FirstOrDefault(s => s.Hysteresis == hysteresis && s.RampDown == rampDown).Label ?? $"{hysteresis:0} °C below, {rampDown:0} %/s";
 
     /// <summary>Speed for a temperature: straight lines between the points, flat before the first and after the last.</summary>
     public static float Evaluate(IReadOnlyList<FanPoint> points, float temp)
@@ -112,6 +166,9 @@ public sealed class FanController
 
     private readonly Dictionary<string, State> _states = new();
     private readonly HashSet<string> _warned = new();
+
+    /// <summary>The duty Kelvra set on a fan output (null = automatic, or not one Kelvra drives).</summary>
+    public float? Applied(string controlId) => _states.TryGetValue(controlId, out var s) ? s.Applied : null;
 
     /// <param name="seconds">Time since the previous tick (limits how fast fans slow down).</param>
     /// <param name="apply">Sets a fan (percent) or returns it to automatic (null).</param>

@@ -88,6 +88,51 @@ internal static class NativeMethods
     [DllImport("kernel32.dll", SetLastError = true)]
     public static extern bool CloseHandle(IntPtr handle);
 
+    public static readonly IntPtr HWND_BOTTOM = new(1);
+    public static readonly IntPtr HWND_NOTOPMOST = new(-2);
+
+    [DllImport("user32.dll", EntryPoint = "GetClassNameW", CharSet = CharSet.Unicode)]
+    public static extern int GetClassName(IntPtr hWnd, System.Text.StringBuilder name, int maxCount);
+
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    public static extern bool EnumChildWindows(IntPtr parent, EnumWindowsProc callback, IntPtr lParam);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct LASTINPUTINFO
+    {
+        public uint cbSize;
+        public uint dwTime;
+    }
+
+    [DllImport("user32.dll")]
+    public static extern bool GetLastInputInfo(ref LASTINPUTINFO info);
+
+    /// <summary>How long since the last key press or mouse move.</summary>
+    public static TimeSpan IdleTime()
+    {
+        var info = new LASTINPUTINFO { cbSize = (uint)Marshal.SizeOf<LASTINPUTINFO>() };
+        return GetLastInputInfo(ref info) ? TimeSpan.FromMilliseconds((uint)Environment.TickCount - info.dwTime) : TimeSpan.Zero;
+    }
+
+    /// <summary>Full exe path of a process, "" if it can't be read (works for most protected processes too).</summary>
+    public static string ProcessPath(int pid)
+    {
+        IntPtr handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, (uint)pid);
+        if (handle == IntPtr.Zero) return "";
+        try
+        {
+            var buffer = new System.Text.StringBuilder(1024);
+            int size = buffer.Capacity;
+            return QueryFullProcessImageName(handle, 0, buffer, ref size) ? buffer.ToString(0, size) : "";
+        }
+        finally
+        {
+            CloseHandle(handle);
+        }
+    }
+
     /// <summary>Turns extended window style bits on or off, leaving the others alone.</summary>
     public static void SetExStyle(IntPtr hwnd, int flags, bool on)
     {

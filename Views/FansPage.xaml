@@ -5,22 +5,35 @@
     <UserControl.Resources>
         <local:MatchConverter x:Key="Match" />
         <local:MatchVisibilityConverter x:Key="MatchVis" />
-        <Style x:Key="ValueText" TargetType="TextBlock" BasedOn="{StaticResource Mono}">
-            <Setter Property="HorizontalAlignment" Value="Right" />
-            <Setter Property="VerticalAlignment" Value="Center" />
+        <local:HeatBrushConverter x:Key="HeatBrush" />
+        <Style x:Key="SideLabel" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Margin" Value="0,0,0,6" />
         </Style>
     </UserControl.Resources>
 
-    <DockPanel Margin="24,20,24,16">
-        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,14">
-            <TextBlock Text="Fans" Style="{StaticResource H1}" />
-            <TextBlock Text="Let a temperature set your fan speeds, or fix a speed. Fans you leave on Automatic stay under BIOS control."
-                       Style="{StaticResource Muted}" Margin="0,4,0,0" />
-        </StackPanel>
+    <DockPanel Margin="32,26,32,16">
+        <Grid DockPanel.Dock="Top" Margin="0,0,0,18">
+            <StackPanel>
+                <TextBlock Text="Fans" Style="{StaticResource H1}" />
+                <TextBlock Text="Hand your fans back to the BIOS any time; Kelvra also does it by itself if it closes or crashes."
+                           Style="{StaticResource Muted}" FontSize="14" Margin="0,4,0,0" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <Button x:Name="RevertButton" Style="{StaticResource GhostButton}" Content="Revert" Click="Revert_Click" Margin="0,0,10,0"
+                        ToolTip="Back to what the fan does now" IsEnabled="False" />
+                <Button x:Name="ApplyButton" Style="{StaticResource AccentButton}" Click="Apply_Click" Padding="16,7" IsEnabled="False"
+                        ToolTip="Start driving the fan with these settings">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE73E;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,10,0" />
+                        <TextBlock x:Name="ApplyText" Text="Apply curve" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Grid>
 
-        <Border x:Name="Banner" DockPanel.Dock="Top" Background="{DynamicResource WarnSoftBrush}" CornerRadius="6" Padding="14,10" Margin="0,0,0,12"
+        <Border x:Name="Banner" DockPanel.Dock="Top" Background="{DynamicResource WarnSoftBrush}" CornerRadius="10" Padding="14,10" Margin="0,0,0,16"
                 Visibility="Collapsed">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="&#xE7BA;" Style="{StaticResource Icon}" Foreground="{DynamicResource WarnBrush}" Margin="0,0,10,0" VerticalAlignment="Top" />
@@ -30,198 +43,259 @@
 
         <Grid>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="270" />
+                <ColumnDefinition Width="300" />
                 <ColumnDefinition Width="16" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="16" />
+                <ColumnDefinition Width="262" />
             </Grid.ColumnDefinitions>
 
             <!-- fan outputs -->
-            <Border Style="{StaticResource Card}" Padding="8" Margin="0">
+            <Border Style="{StaticResource Card}" Padding="10" Margin="0">
                 <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="FAN OUTPUTS" Style="{StaticResource Overline}" Margin="8,6,8,8" />
+                    <TextBlock x:Name="FanCount" DockPanel.Dock="Top" Text="FAN OUTPUTS" Style="{StaticResource Overline}" Margin="8,8,8,10" />
+                    <TextBlock DockPanel.Dock="Bottom" Style="{StaticResource Muted}" Foreground="{DynamicResource SubtleBrush}" Margin="10,14,10,4"
+                               Text="Board fans use the PawnIO driver. Some laptops and ready-made PCs don't allow software control." />
                     <Grid>
-                        <ListBox x:Name="FanList" SelectionChanged="FanList_SelectionChanged" AutomationProperties.Name="Fan outputs">
+                        <ListBox x:Name="FanList" SelectionChanged="FanList_SelectionChanged" AutomationProperties.Name="Fan outputs"
+                                 ItemContainerStyle="{StaticResource CardRow}" VerticalAlignment="Top">
                             <ListBox.ItemTemplate>
                                 <DataTemplate DataType="{x:Type local:FanRow}">
-                                    <StackPanel>
-                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Text="{Binding Device}" Style="{StaticResource Muted}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
-                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                            <TextBlock Text="{Binding ModeText}" Style="{StaticResource Overline}" Foreground="{DynamicResource AccentBrush}" />
-                                            <TextBlock Text="{Binding LiveText}" Style="{StaticResource Mono}" FontSize="11" Foreground="{DynamicResource MutedBrush}" Margin="10,0,0,0" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="46" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border x:Name="Ring" Width="34" Height="34" CornerRadius="17" BorderBrush="{DynamicResource Line2Brush}" BorderThickness="1"
+                                                HorizontalAlignment="Left" VerticalAlignment="Center">
+                                            <!-- three blades around a hub: Segoe's icon fonts have no fan -->
+                                            <Viewbox Width="18" Height="18">
+                                                <Path x:Name="Glyph" Width="24" Height="24" Fill="{DynamicResource MutedBrush}">
+                                                    <Path.Data>
+                                                        <GeometryGroup>
+                                                            <EllipseGeometry Center="12,12" RadiusX="1.8" RadiusY="1.8" />
+                                                            <PathGeometry Figures="M12,10.6 C10.6,7.6 10.9,3.4 14.2,3.3 C17.2,3.2 17.4,7.2 12,10.6 Z" />
+                                                            <PathGeometry Figures="M12,10.6 C10.6,7.6 10.9,3.4 14.2,3.3 C17.2,3.2 17.4,7.2 12,10.6 Z">
+                                                                <PathGeometry.Transform>
+                                                                    <RotateTransform Angle="120" CenterX="12" CenterY="12" />
+                                                                </PathGeometry.Transform>
+                                                            </PathGeometry>
+                                                            <PathGeometry Figures="M12,10.6 C10.6,7.6 10.9,3.4 14.2,3.3 C17.2,3.2 17.4,7.2 12,10.6 Z">
+                                                                <PathGeometry.Transform>
+                                                                    <RotateTransform Angle="240" CenterX="12" CenterY="12" />
+                                                                </PathGeometry.Transform>
+                                                            </PathGeometry>
+                                                        </GeometryGroup>
+                                                    </Path.Data>
+                                                </Path>
+                                            </Viewbox>
+                                        </Border>
+                                        <StackPanel Grid.Column="1" Margin="0,0,8,0" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Device}" />
+                                            <TextBlock Text="{Binding ModeText}" FontSize="12" Foreground="{DynamicResource SubtleBrush}" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock x:Name="Drift" Text="{Binding Drift}" Foreground="{DynamicResource WarnBrush}" FontSize="12" TextWrapping="Wrap"
+                                                       ToolTip="Slower at the same duty than 1–4 months ago: dust, a worn bearing or a cable in the way" />
+                                            <TextBlock x:Name="Pending" Text="Not applied yet" Foreground="{DynamicResource WarnBrush}" FontSize="12" Visibility="Collapsed" />
                                         </StackPanel>
-                                    </StackPanel>
+                                        <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Rpm}" FontSize="15" FontWeight="SemiBold" HorizontalAlignment="Right"
+                                                       Typography.NumeralAlignment="Tabular" />
+                                            <TextBlock Text="{Binding LiveText}" FontSize="12" Foreground="{DynamicResource SubtleBrush}" HorizontalAlignment="Right" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding Drift}" Value="">
+                                            <Setter TargetName="Drift" Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Pending}" Value="True">
+                                            <Setter TargetName="Pending" Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                            <Setter TargetName="Glyph" Property="Fill" Value="{DynamicResource TextBrush}" />
+                                            <Setter TargetName="Ring" Property="BorderBrush" Value="{DynamicResource SubtleBrush}" />
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>
-                        <TextBlock x:Name="NoFansText" Style="{StaticResource Muted}" Margin="8" Visibility="Collapsed"
+                        <TextBlock x:Name="NoFansText" Style="{StaticResource Muted}" Margin="10" Visibility="Collapsed"
                                    Text="No fan outputs found that Kelvra can control." />
                     </Grid>
                 </DockPanel>
             </Border>
 
-            <!-- editor -->
-            <ScrollViewer x:Name="Editor" Grid.Column="2" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
-                <StackPanel Margin="0,0,6,0">
-                    <Border Style="{StaticResource Card}">
-                        <StackPanel>
-                            <Grid>
-                                <StackPanel>
-                                    <TextBlock x:Name="FanTitle" Style="{StaticResource H2}" Margin="0" />
-                                    <TextBlock Text="{Binding Status}" Style="{StaticResource Muted}" Margin="0,2,0,0" />
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
-                                    <StackPanel Margin="0,0,20,0">
-                                        <TextBlock Text="SPEED" Style="{StaticResource Overline}" FontSize="10" />
-                                        <TextBlock x:Name="RpmText" Style="{StaticResource Mono}" FontSize="20" Text="–" />
-                                    </StackPanel>
-                                    <StackPanel>
-                                        <TextBlock Text="OUTPUT" Style="{StaticResource Overline}" FontSize="10" />
-                                        <TextBlock x:Name="OutputText" Style="{StaticResource Mono}" FontSize="20" Text="–" />
-                                    </StackPanel>
-                                </StackPanel>
-                            </Grid>
-                            <Border Style="{StaticResource SegmentHost}" Margin="0,14,0,0">
-                                <StackPanel Orientation="Horizontal" AutomationProperties.Name="Fan mode">
-                                    <RadioButton Style="{StaticResource Segment}" Content="Automatic (BIOS)" GroupName="FanMode"
-                                                 IsChecked="{Binding Mode, Converter={StaticResource Match}, ConverterParameter=Auto}" />
-                                    <RadioButton Style="{StaticResource Segment}" Content="Fixed speed" GroupName="FanMode"
-                                                 IsChecked="{Binding Mode, Converter={StaticResource Match}, ConverterParameter=Fixed}" />
-                                    <RadioButton Style="{StaticResource Segment}" Content="Curve" GroupName="FanMode"
-                                                 IsChecked="{Binding Mode, Converter={StaticResource Match}, ConverterParameter=Curve}" />
-                                </StackPanel>
-                            </Border>
-                        </StackPanel>
-                    </Border>
+            <!-- the selected fan: what it follows, the mode, the curve -->
+            <Border x:Name="Editor" Grid.Column="2" Style="{StaticResource Card}" Margin="0" Visibility="Collapsed">
+                <DockPanel>
+                    <Grid DockPanel.Dock="Top">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <WrapPanel VerticalAlignment="Center">
+                            <TextBlock x:Name="FanTitle" Style="{StaticResource H2}" FontSize="15" VerticalAlignment="Center" Margin="0,0,12,0" />
+                            <StackPanel Orientation="Horizontal" Visibility="{Binding Mode, Converter={StaticResource MatchVis}, ConverterParameter=Curve}">
+                                <TextBlock Text="follows" Foreground="{DynamicResource SubtleBrush}" FontSize="14" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                <ComboBox x:Name="SourceBox" SelectedValue="{Binding SourceId}" SelectedValuePath="Id" MinWidth="200" MaxWidth="340"
+                                          AutomationProperties.Name="Temperature the curve follows">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type local:SensorVm}">
+                                            <StackPanel Orientation="Horizontal" ToolTip="{Binding GroupName}">
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                                <TextBlock Text="{Binding ValueText}" FontWeight="SemiBold" Margin="8,0,0,0"
+                                                           Foreground="{Binding Heat, Converter={StaticResource HeatBrush}, ConverterParameter=muted}" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </StackPanel>
+                        </WrapPanel>
+                        <Border Grid.Column="1" Style="{StaticResource SegmentHost}" VerticalAlignment="Center" Margin="12,0,0,0">
+                            <StackPanel Orientation="Horizontal" AutomationProperties.Name="Fan mode">
+                                <RadioButton Style="{StaticResource Segment}" Content="Automatic" GroupName="FanMode" ToolTip="The BIOS controls this fan"
+                                             IsChecked="{Binding Mode, Converter={StaticResource Match}, ConverterParameter=Auto}" />
+                                <RadioButton Style="{StaticResource Segment}" Content="Fixed" GroupName="FanMode"
+                                             IsChecked="{Binding Mode, Converter={StaticResource Match}, ConverterParameter=Fixed}" />
+                                <RadioButton Style="{StaticResource Segment}" Content="Curve" GroupName="FanMode"
+                                             IsChecked="{Binding Mode, Converter={StaticResource Match}, ConverterParameter=Curve}" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
 
-                    <!-- fixed -->
-                    <Border Style="{StaticResource Card}" Visibility="{Binding Mode, Converter={StaticResource MatchVis}, ConverterParameter=Fixed}">
-                        <Grid>
+                    <!-- curve presets -->
+                    <Grid DockPanel.Dock="Bottom" Margin="0,8,0,0" Visibility="{Binding Mode, Converter={StaticResource MatchVis}, ConverterParameter=Curve}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel x:Name="PresetChips" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="Start from" Foreground="{DynamicResource SubtleBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,10,6" />
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" Text="Drag points · double-click adds" Foreground="{DynamicResource SubtleBrush}" FontSize="12"
+                                   HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,6" TextTrimming="CharacterEllipsis"
+                                   ToolTip="Drag points to shape the curve · double-click to add one · right-click a point to remove it" />
+                    </Grid>
+
+                    <Grid Margin="0,14,0,0">
+                        <!-- automatic -->
+                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="420"
+                                    Visibility="{Binding Mode, Converter={StaticResource MatchVis}, ConverterParameter=Auto}">
+                            <TextBlock Text="The BIOS controls this fan" Style="{StaticResource H2}" FontSize="15" HorizontalAlignment="Center" Margin="0,0,0,4" />
+                            <TextBlock Style="{StaticResource Muted}" FontSize="13" TextAlignment="Center"
+                                       Text="Kelvra doesn't touch it. Pick Fixed for one speed, or Curve to let a temperature set it." />
+                        </StackPanel>
+
+                        <!-- fixed -->
+                        <Grid VerticalAlignment="Top" Margin="0,8,0,0" Visibility="{Binding Mode, Converter={StaticResource MatchVis}, ConverterParameter=Fixed}">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="150" />
+                                <ColumnDefinition Width="80" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="64" />
+                                <ColumnDefinition Width="56" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="Speed" Style="{StaticResource FieldLabel}" />
-                            <Slider Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="1" VerticalAlignment="Center" Value="{Binding FixedPercent}"
-                                    AutomationProperties.Name="Fixed fan speed" />
-                            <TextBlock Grid.Column="2" Text="{Binding FixedPercent, StringFormat={}{0:0} %}" Style="{StaticResource ValueText}" />
+                            <Slider Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center"
+                                    Value="{Binding FixedPercent}" AutomationProperties.Name="Fixed fan speed" />
+                            <TextBlock Grid.Column="2" Text="{Binding FixedPercent, StringFormat={}{0:0} %}" HorizontalAlignment="Right" VerticalAlignment="Center" />
                         </Grid>
-                    </Border>
 
-                    <!-- curve -->
-                    <Border Style="{StaticResource Card}" Visibility="{Binding Mode, Converter={StaticResource MatchVis}, ConverterParameter=Curve}">
-                        <StackPanel>
-                            <Grid Margin="0,0,0,12">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="150" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="Follows" Style="{StaticResource FieldLabel}" />
-                                <ComboBox x:Name="SourceBox" Grid.Column="1" SelectedValue="{Binding SourceId}" SelectedValuePath="Tag"
-                                          AutomationProperties.Name="Temperature the curve follows" HorizontalAlignment="Left" MinWidth="320" />
-                            </Grid>
-                            <Grid Margin="0,0,0,8">
-                                <TextBlock Text="CURVE" Style="{StaticResource Overline}" VerticalAlignment="Center" />
+                        <!-- curve -->
+                        <local:CurveEditor x:Name="Curve" Profile="{Binding}" AutomationProperties.Name="Fan curve" MinHeight="260"
+                                           Visibility="{Binding Mode, Converter={StaticResource MatchVis}, ConverterParameter=Curve}" />
+                    </Grid>
+                </DockPanel>
+            </Border>
+
+            <!-- the selected point and the safety limits -->
+            <Border x:Name="SafetyCard" Grid.Column="4" Style="{StaticResource Card}" Margin="0" Visibility="Collapsed">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Focusable="False">
+                    <StackPanel>
+                        <StackPanel x:Name="PointPanel" Margin="0,0,0,16"
+                                    Visibility="{Binding Mode, Converter={StaticResource MatchVis}, ConverterParameter=Curve}">
+                            <Grid Margin="0,0,0,10">
+                                <TextBlock Text="SELECTED POINT" Style="{StaticResource Overline}" VerticalAlignment="Center" />
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                    <TextBlock Text="Start from:" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                    <Button Content="Silent" Tag="silent" Click="Preset_Click" Margin="0,0,6,0" Padding="10,4" ToolTip="Quiet until it gets warm" />
-                                    <Button Content="Balanced" Tag="balanced" Click="Preset_Click" Margin="0,0,6,0" Padding="10,4" />
-                                    <Button Content="Performance" Tag="performance" Click="Preset_Click" Padding="10,4" ToolTip="Cooler, louder" />
+                                    <Button Style="{StaticResource IconButton}" Content="&#xE76B;" FontSize="10" Width="24" Height="22" Click="PreviousPoint_Click"
+                                            ToolTip="Previous point" AutomationProperties.Name="Previous point" />
+                                    <Button Style="{StaticResource IconButton}" Content="&#xE76C;" FontSize="10" Width="24" Height="22" Click="NextPoint_Click"
+                                            ToolTip="Next point" AutomationProperties.Name="Next point" />
                                 </StackPanel>
                             </Grid>
-                            <Border Background="{DynamicResource InputBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="4" Padding="4">
-                                <local:CurveEditor x:Name="Curve" Height="260" Profile="{Binding}" AutomationProperties.Name="Fan curve" />
-                            </Border>
-                            <TextBlock Text="POINTS (°C → %)" Style="{StaticResource Overline}" Margin="0,12,0,6" />
-                            <ItemsControl x:Name="PointList" ItemsSource="{Binding Points}" Focusable="False">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <WrapPanel />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="{x:Type local:FanPoint}">
-                                        <StackPanel Orientation="Horizontal" Margin="0,0,14,6">
-                                            <TextBox Width="48" Text="{Binding Temp, UpdateSourceTrigger=LostFocus, StringFormat={}{0:0}}" AutomationProperties.Name="Temperature °C"
-                                                     LostFocus="Point_LostFocus" />
-                                            <TextBlock Text="° →" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="4,0" />
-                                            <TextBox Width="48" Text="{Binding Percent, UpdateSourceTrigger=LostFocus, StringFormat={}{0:0}}" AutomationProperties.Name="Fan speed %"
-                                                     LostFocus="Point_LostFocus" />
-                                            <TextBlock Text="%" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="4,0,0,0" />
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                            <Grid DataContext="{Binding SelectedPoint, ElementName=Curve}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="10" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Temperature" Style="{StaticResource SideLabel}" />
+                                    <Grid>
+                                        <TextBox Style="{StaticResource UnitBox}" Text="{Binding Temp, UpdateSourceTrigger=LostFocus, StringFormat={}{0:0}}"
+                                                 LostFocus="Point_LostFocus" AutomationProperties.Name="Selected point temperature °C" />
+                                        <TextBlock Text="°C" Style="{StaticResource UnitText}" />
+                                    </Grid>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Speed" Style="{StaticResource SideLabel}" />
+                                    <Grid>
+                                        <TextBox Style="{StaticResource UnitBox}" Text="{Binding Percent, UpdateSourceTrigger=LostFocus, StringFormat={}{0:0}}"
+                                                 LostFocus="Point_LostFocus" AutomationProperties.Name="Selected point fan speed %" />
+                                        <TextBlock Text="%" Style="{StaticResource UnitText}" />
+                                    </Grid>
+                                </StackPanel>
+                            </Grid>
+                            <Rectangle Height="1" Fill="{DynamicResource LineBrush}" Margin="0,16,0,0" />
                         </StackPanel>
-                    </Border>
 
-                    <!-- safety -->
-                    <Border x:Name="SafetyCard" Style="{StaticResource Card}">
-                        <StackPanel>
-                            <TextBlock Text="Safety" Style="{StaticResource H2}" />
-                            <Grid Margin="0,0,0,10">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="64" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel>
-                                    <TextBlock Text="Never slower than" Style="{StaticResource FieldLabel}" />
-                                    <TextBlock Text="Also protects you if Kelvra is force-closed" Style="{StaticResource Muted}" />
-                                </StackPanel>
-                                <Slider Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="1" VerticalAlignment="Center" Value="{Binding MinPercent}"
-                                        AutomationProperties.Name="Minimum fan speed" />
-                                <TextBlock Grid.Column="2" Text="{Binding MinPercent, StringFormat={}{0:0} %}" Style="{StaticResource ValueText}" />
-                            </Grid>
-                            <Grid Margin="0,0,0,10">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="64" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel>
-                                    <TextBlock Text="Full speed from" Style="{StaticResource FieldLabel}" />
-                                    <TextBlock Text="Temperature of the chosen sensor" Style="{StaticResource Muted}" />
-                                </StackPanel>
-                                <Slider Grid.Column="1" Minimum="50" Maximum="120" TickFrequency="1" VerticalAlignment="Center" Value="{Binding CriticalTemp}"
-                                        AutomationProperties.Name="Full speed from temperature" />
-                                <TextBlock Grid.Column="2" Text="{Binding CriticalTemp, StringFormat={}{0:0} °C}" Style="{StaticResource ValueText}" />
-                            </Grid>
-                            <Grid Margin="0,0,0,10" Visibility="{Binding Mode, Converter={StaticResource MatchVis}, ConverterParameter=Curve}">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="64" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel>
-                                    <TextBlock Text="Slow down after a drop of" Style="{StaticResource FieldLabel}" />
-                                    <TextBlock Text="Stops the fan pulsing up and down" Style="{StaticResource Muted}" />
-                                </StackPanel>
-                                <Slider Grid.Column="1" Minimum="0" Maximum="15" TickFrequency="1" VerticalAlignment="Center" Value="{Binding Hysteresis}"
-                                        AutomationProperties.Name="Hysteresis" />
-                                <TextBlock Grid.Column="2" Text="{Binding Hysteresis, StringFormat={}{0:0} °C}" Style="{StaticResource ValueText}" />
-                            </Grid>
+                        <TextBlock Text="SAFETY" Style="{StaticResource Overline}" Margin="0,0,0,16" />
+
+                        <TextBlock Text="Never slower than" Style="{StaticResource SideLabel}" ToolTip="Also protects you if Kelvra is force-closed" />
+                        <Grid Margin="0,0,0,16">
+                            <TextBox Style="{StaticResource UnitBox}" Text="{Binding MinPercent, UpdateSourceTrigger=LostFocus, StringFormat={}{0:0}}"
+                                     AutomationProperties.Name="Never slower than, %" />
+                            <TextBlock Text="%" Style="{StaticResource UnitText}" />
+                        </Grid>
+
+                        <TextBlock Text="Full speed above" Style="{StaticResource SideLabel}" ToolTip="Temperature of the sensor the curve follows" />
+                        <Grid Margin="0,0,0,16">
+                            <TextBox Style="{StaticResource UnitBox}" Padding="28,7,34,7" Text="{Binding CriticalTemp, UpdateSourceTrigger=LostFocus, StringFormat={}{0:0}}"
+                                     AutomationProperties.Name="Full speed above, °C" />
+                            <Ellipse Width="6" Height="6" Fill="{DynamicResource CritBrush}" HorizontalAlignment="Left" Margin="14,0,0,0" IsHitTestVisible="False" />
+                            <TextBlock Text="°C" Style="{StaticResource UnitText}" />
+                        </Grid>
+
+                        <StackPanel Visibility="{Binding Mode, Converter={StaticResource MatchVis}, ConverterParameter=Curve}">
+                            <TextBlock Text="Slow down gently" Style="{StaticResource SideLabel}"
+                                       ToolTip="How far the temperature must drop before the fan slows down, and how fast it may then. Speeding up is always immediate." />
+                            <ComboBox x:Name="SlowDownBox" Margin="0,0,0,16" SelectionChanged="SlowDown_Changed" AutomationProperties.Name="Slow down gently" />
+                        </StackPanel>
+
+                        <!-- not a choice: it's a safety rule, so the switch shows it on and can't be turned off -->
+                        <Border Background="Transparent" ToolTip="Kelvra always does this: a curve can't follow a sensor that's gone">
                             <Grid>
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="190" />
+                                    <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="64" />
                                 </Grid.ColumnDefinitions>
-                                <StackPanel>
-                                    <TextBlock Text="Slow down by at most" Style="{StaticResource FieldLabel}" />
-                                    <TextBlock Text="Speeding up is always immediate" Style="{StaticResource Muted}" />
-                                </StackPanel>
-                                <Slider Grid.Column="1" Minimum="1" Maximum="50" TickFrequency="1" VerticalAlignment="Center" Value="{Binding RampDown}"
-                                        AutomationProperties.Name="Slow-down rate" />
-                                <TextBlock Grid.Column="2" Text="{Binding RampDown, StringFormat={}{0:0} %/s}" Style="{StaticResource ValueText}" />
+                                <CheckBox Style="{StaticResource Switch}" IsChecked="True" IsHitTestVisible="False" Focusable="False" Margin="-16,0,10,0"
+                                          VerticalAlignment="Top" AutomationProperties.Name="Back to BIOS if the sensor disappears (always on)" />
+                                <TextBlock Grid.Column="1" Text="Back to BIOS if the sensor disappears" TextWrapping="Wrap" FontSize="13" VerticalAlignment="Center" />
                             </Grid>
-                            <TextBlock Style="{StaticResource Muted}" Margin="0,12,0,0" TextWrapping="Wrap"
-                                       Text="Kelvra hands fans back to the BIOS when it exits, crashes, you sign out, or the temperature sensor disappears. If Kelvra is ended from Task Manager, a fan can keep its last speed until the PC restarts – the minimum above is your safety net then." />
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
-            </ScrollViewer>
+                        </Border>
+                        <Grid Margin="0,14,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="20" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="&#xE72E;" Style="{StaticResource Icon}" FontSize="12" Foreground="{DynamicResource SubtleBrush}" VerticalAlignment="Top"
+                                       Margin="0,2,0,0" />
+                            <TextBlock Grid.Column="1" Foreground="{DynamicResource SubtleBrush}" FontSize="12" TextWrapping="Wrap"
+                                       Text="Always on when Kelvra exits, crashes or you sign out."
+                                       ToolTip="If Kelvra is ended from Task Manager, a fan can keep its last speed until the PC restarts: the minimum above is your safety net then." />
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
         </Grid>
     </DockPanel>
 </UserControl>

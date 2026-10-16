@@ -16,6 +16,9 @@ public static class Accents
 
     public static readonly Accent[] All =
     {
+        // Kelvra 2's default: no colour at all. Buttons, tabs and selection are white on graphite (near-black on paper),
+        // so the thermal scale is the only colour on screen and always means heat.
+        new("Graphite", Rgb(0xE8EBEF), Rgb(0x15181C)),
         new("Amber", Rgb(0xF5A524), Rgb(0xB45309)),
         new("Teal", Rgb(0x2DD4BF), Rgb(0x0F766E)),
         new("Blue", Rgb(0x7AA2FF), Rgb(0x1D4ED8)),
@@ -25,11 +28,11 @@ public static class Accents
         new("Green", Rgb(0x4ADE80), Rgb(0x15803D)),
     };
 
-    public const string Default = "Amber";
+    public const string Default = "Graphite";
 
     // The panels accents are drawn on (SurfaceBrush in Dark.xaml / Light.xaml)
-    private static readonly Color DarkSurface = Rgb(0x13161B), LightSurface = Rgb(0xFFFFFF);
-    private static readonly Color DarkText = Rgb(0x0C0E11), White = Rgb(0xFFFFFF);
+    private static readonly Color DarkSurface = Rgb(0x14171B), LightSurface = Rgb(0xFFFFFF);
+    private static readonly Color DarkText = Rgb(0x0D0F12), White = Rgb(0xFFFFFF);
 
     public static Accent Find(string? name) =>
         All.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase)) ?? All[0];
@@ -57,6 +60,9 @@ public static class Accents
         if (!IsCustom(value))
         {
             var a = Find(value);
+            // Graphite fills with the text colour of the theme: white buttons on graphite, near-black ones on paper
+            if (a.Name == "Graphite")
+                return dark ? (a.Bright, a.Bright, DarkText, Rgb(0x1B1F25)) : (a.Deep, a.Deep, White, Rgb(0xF0F2F5));
             return (dark ? a.Bright : a.Deep, a.Bright, dark ? DarkText : Rgb(0x1A1205), Soft(a.Bright, dark));
         }
         var c = ColorOf(value);

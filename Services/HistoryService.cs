@@ -38,10 +38,11 @@ public sealed class HistoryService
         if (gap.TotalMilliseconds < 950 && gap > TimeSpan.FromSeconds(-2)) return;
         _last = now;
 
+        // Only values read recently: a device skipped while Kelvra is in the tray leaves a gap, not a flat line
         int head = _seconds.Head;
         _seconds.Times[head] = now;
         foreach (var s in store.All)
-            _seconds.Buffer(s.Id)[head] = s.Value ?? float.NaN;
+            _seconds.Buffer(s.Id)[head] = s.FreshValue() ?? float.NaN;
         _seconds.Advance();
 
         // One-minute averages for the long ranges
@@ -51,7 +52,7 @@ public sealed class HistoryService
         foreach (var s in store.All)
         {
             var acc = _minute.GetValueOrDefault(s.Id);
-            if (s.Value is float v && !float.IsNaN(v)) acc = (acc.Sum + v, acc.Count + 1);
+            if (s.NewValue is float v && !float.IsNaN(v)) acc = (acc.Sum + v, acc.Count + 1); // each reading counted once
             _minute[s.Id] = acc;
         }
 

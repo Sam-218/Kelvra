@@ -48,10 +48,68 @@ public sealed class DevicePanel : ObservableObject
     public string Kind { get; }
     public string Device { get; }
     public ObservableCollection<StatCell> Stats { get; }
-    private string? _tempId, _loadId;
+    private string? _tempId, _loadId, _clockId, _powerId;
     public string? TempId { get => _tempId; private set => Set(ref _tempId, value); }
     public string? LoadId { get => _loadId; private set => Set(ref _loadId, value); }
+    public string? ClockId { get => _clockId; private set => Set(ref _clockId, value); }
+    public string? PowerId { get => _powerId; private set => Set(ref _powerId, value); }
     public string ChartName => $"{Kind} temperature and load";
+    public bool IsGpu => Kind == "GPU";
+
+    // ---------- Kelvra 2: heat first ----------
+
+    private string _hero = "–", _rangeText = "", _headroomText = "", _stateWord = "Normal";
+    private Heat _heat = Heat.Fine;
+    private double _temp = double.NaN, _rangeMin = double.NaN, _rangeMax = double.NaN, _limit = Thermal.CpuLimit;
+
+    /// <summary>The temperature, big ("61").</summary>
+    public string Hero { get => _hero; private set => Set(ref _hero, value); }
+    /// <summary>Its band on the thermal scale: the colour of the number, the line and the state pill.</summary>
+    public Heat Heat { get => _heat; private set => Set(ref _heat, value); }
+    /// <summary>"Normal", "Warm", "Hot" or "Critical".</summary>
+    public string StateWord { get => _stateWord; private set => Set(ref _stateWord, value); }
+    /// <summary>"54–68° past hour".</summary>
+    public string RangeText { get => _rangeText; private set => Set(ref _rangeText, value); }
+    /// <summary>"34° to the 95 °C limit".</summary>
+    public string HeadroomText { get => _headroomText; private set => Set(ref _headroomText, value); }
+    /// <summary>°C now, the lowest and highest of the graph's range, and the limit (the user's alert, else the chip's usual one).</summary>
+    public double Temp { get => _temp; private set => Set(ref _temp, value); }
+    public double RangeMin { get => _rangeMin; private set => Set(ref _rangeMin, value); }
+    public double RangeMax { get => _rangeMax; private set => Set(ref _rangeMax, value); }
+    public double Limit { get => _limit; private set => Set(ref _limit, value); }
+
+    /// <summary>The heat values, from the live temperature and the history of the shown range.</summary>
+    public void UpdateHeat(IReadOnlyDictionary<string, SensorVm> byId, HistoryService history, TimeSpan range, IEnumerable<AlertRule> alerts)
+    {
+        var temp = TempId != null ? byId.GetValueOrDefault(TempId) : null;
+        Limit = Thermal.LimitFor(TempId ?? "", IsGpu, alerts);
+        if (temp?.Value is not float t || float.IsNaN(t))
+        {
+            // No reading (CPU temperatures need admin rights and the PawnIO driver): say so instead of "Normal"
+            (Hero, Temp, RangeText, HeadroomText, StateWord, Heat) = ("–", double.NaN, "No temperature reading", "", "No reading", Heat.Fine);
+            return;
+        }
+        Temp = t;
+        Heat = Thermal.Of(t, Limit);
+        StateWord = Thermal.StateWord(Heat);
+        Hero = SensorFormat.ToDisplay(SensorType.Temperature, t).ToString("0", Inv);
+
+        var points = new List<(DateTime Time, float Value)>();
+        history.GetSeries(TempId!, range, points);
+        var values = points.Select(p => p.Value).Where(v => !float.IsNaN(v)).ToList();
+        (RangeMin, RangeMax) = values.Count > 0 ? (values.Min(), values.Max()) : (t, t);
+        string span = range.TotalMinutes >= 60 ? range.TotalHours >= 24 ? "past day" : range.TotalHours > 1 ? $"past {range.TotalHours:0} hours" : "past hour"
+                                               : $"past {range.TotalMinutes:0} min";
+        RangeText = $"{Deg(RangeMin)}–{Deg(RangeMax)}° {span}";
+        double left = Limit - t;
+        HeadroomText = left > 0
+            ? $"{Deg(left, difference: true)}° to the {SensorFormat.Format(SensorType.Temperature, (float)Limit)} limit"
+            : $"At the {SensorFormat.Format(SensorType.Temperature, (float)Limit)} limit";
+    }
+
+    /// <summary>A temperature (or a difference of two) in the unit shown, rounded.</summary>
+    private static string Deg(double celsius, bool difference = false) =>
+        (difference ? (SensorFormat.UseFahrenheit ? celsius * 9 / 5 : celsius) : SensorFormat.ToDisplay(SensorType.Temperature, (float)celsius)).ToString("0", Inv);
 
     /// <summary>Re-reads the four values from the current sensors.</summary>
     public void Update(IReadOnlyList<SensorVm> sensors)
@@ -64,28 +122,33 @@ public sealed class DevicePanel : ObservableObject
         var power = Overview.Pick(own, SensorType.Power, "Package", cpu ? "CPU" : "GPU Power", "GPU");
         TempId = temp?.Id;
         LoadId = load?.Id;
+        PowerId = power?.Id;
 
         Stats[0].Unit = SensorFormat.Unit(SensorType.Temperature);
         Show(Stats[0], temp, "0.0");
         Show(Stats[1], load, "0");
-        Show(Stats[3], power, "0.0");
+        Show(Stats[3], power, "0");
 
         if (cpu)
         {
-            // CPUs report one clock per core: show the average, and the lowest/highest any core reached
+            // CPUs report one clock per core: show the average in GHz, and the lowest/highest any core reached
             var cores = own.Where(s => s.Type == SensorType.Clock && Overview.IsCoreClock(s.Name) && s.Value > 0).ToList();
+            ClockId = cores.FirstOrDefault()?.Id;
+            Stats[2].Unit = "GHz";
             if (cores.Count == 0) Show(Stats[2], null, "0");
             else
             {
-                Stats[2].Value = cores.Average(c => c.Value!.Value).ToString("0", Inv);
+                Stats[2].Value = (cores.Average(c => c.Value!.Value) / 1000).ToString("0.0", Inv);
                 var mins = cores.Where(c => c.Min > 0).Select(c => c.Min!.Value).ToList();
                 var maxs = cores.Where(c => c.Max > 0).Select(c => c.Max!.Value).ToList();
-                Stats[2].Range = mins.Count > 0 && maxs.Count > 0 ? $"{mins.Min().ToString("0", Inv)} – {maxs.Max().ToString("0", Inv)}" : "";
+                Stats[2].Range = mins.Count > 0 && maxs.Count > 0 ? $"{(mins.Min() / 1000).ToString("0.0", Inv)} – {(maxs.Max() / 1000).ToString("0.0", Inv)}" : "";
             }
         }
         else
         {
-            Show(Stats[2], Overview.Pick(own, SensorType.Clock, "GPU Core"), "0");
+            var clock = Overview.Pick(own, SensorType.Clock, "GPU Core");
+            ClockId = clock?.Id;
+            Show(Stats[2], clock, "0");
         }
     }
 
@@ -109,14 +172,30 @@ public sealed class SideStat : ObservableObject
     private string _value = "–";
     private string _detail = "";
     private double _percent;
+    private string? _sparkId;
 
-    public SideStat(string label) => Label = label;
+    public SideStat(string label, string icon = "")
+    {
+        Label = label;
+        Icon = icon;
+    }
 
     public string Label { get; }
+    /// <summary>Segoe Fluent icon glyph next to the label.</summary>
+    public string Icon { get; }
     public string Value { get => _value; set => Set(ref _value, value); }
     public string Detail { get => _detail; set => Set(ref _detail, value); }
     /// <summary>0–100 for the bar.</summary>
     public double Percent { get => _percent; set => Set(ref _percent, Math.Clamp(value, 0, 100)); }
+    /// <summary>A sensor drawn as a line instead of the bar (network), or null.</summary>
+    public string? SparkId { get => _sparkId; set => Set(ref _sparkId, value); }
+    public bool HasSpark => SparkId != null;
+
+    protected override void OnPropertyChanged(string? name = null)
+    {
+        base.OnPropertyChanged(name);
+        if (name == nameof(SparkId)) base.OnPropertyChanged(nameof(HasSpark));
+    }
 }
 
 /// <summary>One card of the mini window: a big value, a sparkline and three small values.</summary>
@@ -140,6 +219,12 @@ public sealed class MiniCard : ObservableObject
     public string HeroUnit { get => _heroUnit; set => Set(ref _heroUnit, value); }
     /// <summary>Sensor drawn as the sparkline (null = none).</summary>
     public string? SparkId { get => _sparkId; set => Set(ref _sparkId, value); }
+    /// <summary>The big number's band when it's a temperature (its colour), else null.</summary>
+    public Heat? Heat { get => _heat; set => Set(ref _heat, value); }
+    /// <summary>The stats on one line: "34 % · 4.1 GHz · 65 W".</summary>
+    public string Detail { get => _detail; set => Set(ref _detail, value); }
+    private Heat? _heat;
+    private string _detail = "";
 
     /// <summary>CPU/GPU card from its Overview panel: temperature big, then load, clock and power.</summary>
     public void From(DevicePanel p)
@@ -148,6 +233,7 @@ public sealed class MiniCard : ObservableObject
         HeroUnit = p.Stats[0].Unit;
         SparkId = p.TempId ?? p.LoadId;
         for (int i = 0; i < 3; i++) Stats[i].Value = $"{p.Stats[i + 1].Value} {p.Stats[i + 1].Unit}";
+        Detail = string.Join(" · ", Stats.Select(s => s.Value.Trim()).Where(v => v.Length > 0 && !v.StartsWith('–')));
     }
 }
 
@@ -186,6 +272,33 @@ public static class Overview
         return temps.MaxBy(s => s.Value);
     }
 
+    /// <summary>
+    /// The Overview's title and the sentence under it: "All quiet." while everything is fine, else which chip is warm,
+    /// hot or at its limit, and how far it is from that limit.
+    /// </summary>
+    public static (string Headline, string Subline) Headline(IReadOnlyCollection<DevicePanel> panels, bool sensorError)
+    {
+        if (sensorError) return ("Sensors aren't answering.", "Kelvra keeps trying; the numbers shown may be old.");
+        var known = panels.Where(p => !double.IsNaN(p.Temp)).ToList();
+        if (known.Count == 0) return ("All quiet.", "Waiting for the first temperatures.");
+        var worst = known.Max(p => p.Heat);
+        var who = known.Where(p => p.Heat == worst).ToList();
+        string names = string.Join(" and ", who.Select(p => p.Kind));
+        bool one = who.Count == 1;
+        var first = who[0];
+        string limit = SensorFormat.Format(SensorType.Temperature, (float)first.Limit);
+        string left = $"{SensorFormat.ToDisplay(SensorType.Temperature, (float)first.Limit) - SensorFormat.ToDisplay(SensorType.Temperature, (float)first.Temp):0}°";
+        return worst switch
+        {
+            Heat.Critical => ($"{names} {(one ? "is" : "are")} at the limit.",
+                              one ? $"{first.Kind} is at {SensorFormat.Format(SensorType.Temperature, (float)first.Temp)}, its limit is {limit}. Check its cooling."
+                                  : "Check the cooling, and what's running."),
+            Heat.Hot => ($"{names} {(one ? "is" : "are")} running hot.", one ? $"{left} to the {limit} limit." : "Close to their limits."),
+            Heat.Warm => ($"{names} {(one ? "is" : "are")} warm.", one ? $"Still {left} below the {limit} limit." : "Still below their limits."),
+            _ => ("All quiet.", $"{string.Join(" and ", known.Select(p => p.Kind).Distinct())} {(known.Count == 1 ? "is" : "are")} well inside {(known.Count == 1 ? "its limit" : "their limits")}."),
+        };
+    }
+
     /// <summary>One panel per CPU and GPU, in detection order.</summary>
     public static List<DevicePanel> Panels(IReadOnlyList<SensorVm> sensors) =>
         sensors.Where(s => IsCpu(s) || s.IsGpu)
@@ -211,12 +324,15 @@ public static class Overview
     public static void UpdateNetwork(SideStat stat, IReadOnlyList<SensorVm> sensors, ref float peak)
     {
         var net = sensors.Where(s => s.HardwareType == HardwareType.Network && s.Type == SensorType.Throughput).ToList();
-        float down = net.Where(s => s.Name.Contains("Download", StringComparison.OrdinalIgnoreCase)).Sum(s => s.Value ?? 0);
+        var downloads = net.Where(s => s.Name.Contains("Download", StringComparison.OrdinalIgnoreCase)).ToList();
+        float down = downloads.Sum(s => s.Value ?? 0);
         float up = net.Where(s => s.Name.Contains("Upload", StringComparison.OrdinalIgnoreCase)).Sum(s => s.Value ?? 0);
         peak = Math.Max(peak, Math.Max(down, up));
-        stat.Value = $"↓ {SensorFormat.Format(SensorType.Throughput, down)}";
-        stat.Detail = $"↑ {SensorFormat.Format(SensorType.Throughput, up)}";
+        stat.Value = SensorFormat.Format(SensorType.Throughput, down);
+        stat.Detail = $"↓ {SensorFormat.Format(SensorType.Throughput, down)} · ↑ {SensorFormat.Format(SensorType.Throughput, up)}";
         stat.Percent = peak > 0 ? down / peak * 100 : 0;
+        // The line follows the busiest adapter's downloads
+        stat.SparkId ??= downloads.MaxBy(s => s.Max ?? 0)?.Id;
     }
 
     public static void UpdateDrive(SideStat stat, string root)

@@ -17,7 +17,7 @@ public abstract class UsageRow : ObservableObject
 
     public abstract int Pid { get; }
     public abstract string DisplayName { get; }
-    /// <summary>The exe name as Windows reports it ("claude.exe"; kernel processes have no extension: "System").</summary>
+    /// <summary>The exe name as Windows reports it ("spotify.exe"; kernel processes have no extension: "System").</summary>
     public abstract string ImageName { get; }
     public abstract string? Path { get; }
     public abstract ImageSource? Icon { get; }
@@ -54,7 +54,7 @@ public sealed class ProcessRow : UsageRow
     public override int Pid { get; }
     /// <summary>Start time (100 ns ticks): tells a process apart from a later one that got the same PID.</summary>
     internal long Created { get; }
-    /// <summary>Exe name without ".exe" ("claude").</summary>
+    /// <summary>Exe name without ".exe" ("spotify").</summary>
     public string Name { get; }
     public override string ImageName { get; }
     public override string? Path { get; }
@@ -89,7 +89,7 @@ public sealed class ProcessRow : UsageRow
     internal long LastIoBytes;
 }
 
-/// <summary>An app and the background processes it started, added up (Task Manager's "Claude (14)").</summary>
+/// <summary>An app and the background processes it started, added up (Task Manager's "Spotify (14)").</summary>
 public sealed class AppGroup : UsageRow
 {
     private int _count;

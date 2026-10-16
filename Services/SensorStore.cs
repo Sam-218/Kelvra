@@ -8,7 +8,7 @@ public sealed class SensorStore : IDisposable
 {
     private readonly HardwareService _hardware = new();
     private readonly Action _open;
-    private readonly Func<List<SensorReading>> _poll;
+    private readonly Func<Func<string, HardwareType, bool>?, HashSet<string>, List<SensorReading>> _poll;
     private readonly Dictionary<string, int> _hardwareOrder = new();
     private readonly Dictionary<string, string> _groupNames = new();
 
@@ -36,7 +36,7 @@ public sealed class SensorStore : IDisposable
     internal SensorStore(Func<List<SensorReading>> poll, Func<string, float?, bool>? setFan = null)
     {
         _open = () => { };
-        _poll = poll;
+        _poll = (_, _) => poll();
         _setFan = setFan ?? ((_, _) => false);
     }
 
@@ -82,6 +82,12 @@ public sealed class SensorStore : IDisposable
     /// <summary>Sensors that don't come from the hardware (the "Game" device), added to every poll on the UI thread.</summary>
     public Func<IEnumerable<SensorReading>?>? ExtraReadings { get; set; }
 
+    /// <summary>
+    /// Asked on the UI thread before each poll: which devices to read this time (see <see cref="PollScheduler"/>).
+    /// Null, or a null answer, reads everything.
+    /// </summary>
+    public Func<Func<string, HardwareType, bool>?>? PlanPoll { get; set; }
+
     /// <summary>Longest wait between retries while polling keeps failing.</summary>
     internal static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(30);
 
@@ -104,9 +110,11 @@ public sealed class SensorStore : IDisposable
                     await Task.Run(_open, ct);
                     opened = true;
                 }
-                var readings = await Task.Run(_poll, ct);
+                var due = Loaded ? PlanPoll?.Invoke() : null; // the first poll reads everything, so every sensor is listed
+                var skipped = new HashSet<string>();
+                var readings = await Task.Run(() => _poll(due, skipped), ct);
                 if (ExtraReadings?.Invoke() is { } extra) readings.AddRange(extra);
-                Apply(readings);
+                Apply(readings, skipped);
                 Error = null;
                 failures = 0;
 
@@ -155,9 +163,10 @@ public sealed class SensorStore : IDisposable
     /// <summary>
     /// Updates known sensors in place (bindings just see property changes) and appends newly found ones. Sensors missing
     /// from this poll (unplugged, deactivated by the driver) lose their value, so fans, alerts and overlays don't follow
-    /// a frozen reading.
+    /// a frozen reading. Devices the poll left out on purpose (<paramref name="skipped"/>) keep their last values; their
+    /// sensors report themselves as not fresh (<see cref="SensorVm.FreshValue"/>).
     /// </summary>
-    private void Apply(List<SensorReading> readings)
+    private void Apply(List<SensorReading> readings, IReadOnlySet<string>? skipped = null)
     {
         var fresh = new List<SensorReading>();
         var seen = new HashSet<string>(readings.Count);
@@ -168,7 +177,11 @@ public sealed class SensorStore : IDisposable
             else fresh.Add(r);
         }
         foreach (var vm in All)
-            if (!seen.Contains(vm.Id)) vm.Clear();
+        {
+            if (seen.Contains(vm.Id)) continue;
+            if (skipped?.Contains(vm.HardwareId) == true) vm.MarkSkipped();
+            else vm.Clear();
+        }
         if (fresh.Count == 0) return;
 
         foreach (var r in fresh)

@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 
 namespace Kelvra;
 
-/// <summary>What one game session (or benchmark run) looked like, kept in History → Game sessions.</summary>
+/// <summary>What one game session (or benchmark run) looked like, kept on the Games page.</summary>
 public sealed record GameSessionSummary(
     string Game,
     DateTime Started,
@@ -22,24 +22,26 @@ public sealed record GameSessionSummary(
     float? MaxCpuTemp,
     float? MaxGpuTemp,
     bool Benchmark,
-    string? CsvFile)
+    string? CsvFile,
+    string? Exe = null,
+    bool Crashed = false)
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
     /// <summary>Builds the summary from a game's frame statistics.</summary>
     public static GameSessionSummary From(string game, DateTime started, FrameStats stats, float? maxCpuTemp, float? maxGpuTemp,
-                                          bool benchmark = false, string? csvFile = null)
+                                          bool benchmark = false, string? csvFile = null, string? exe = null)
     {
         var s = stats.Session();
         var snap = stats.Snapshot(); // only the session values are used
         return new GameSessionSummary(game, started, s.Length.TotalSeconds, s.Avg, s.Low1, s.Low01, snap.MinFps, snap.MaxFps,
                                       s.Stutters, s.GpuBoundSeconds, s.CpuBoundSeconds, s.CappedSeconds, maxCpuTemp, maxGpuTemp,
-                                      benchmark, csvFile);
+                                      benchmark, csvFile, exe);
     }
 
-    // ---------- display (History page) ----------
+    // ---------- display (Games page) ----------
 
-    [JsonIgnore] public string Title => Benchmark ? $"{Game} · Benchmark" : Game;
+    [JsonIgnore] public string Title => Benchmark ? $"{Game} · Benchmark" : Crashed ? $"{Game} · crashed" : Game;
 
     [JsonIgnore] public string When
     {
@@ -79,6 +81,46 @@ public sealed record GameSessionSummary(
     [JsonIgnore] public bool HasCsv => CsvFile != null && File.Exists(CsvFile);
 
     private static string N(double? v) => v is double d ? d.ToString("0", Inv) : "-";
+}
+
+/// <summary>One game on the Games page: all its sessions and benchmark runs (newest first) and their numbers together.</summary>
+public sealed record GameGroup(string Name, List<GameSessionSummary> Sessions, GameRow? Stats)
+{
+    /// <summary>One card per game, the most recently played first. Names match regardless of case.</summary>
+    public static List<GameGroup> From(IEnumerable<GameSessionSummary> sessions) =>
+        sessions.GroupBy(s => s.Game, StringComparer.OrdinalIgnoreCase)
+                .Select(g =>
+                {
+                    var list = g.OrderByDescending(s => s.Started).ToList();
+                    return new GameGroup(list[0].Game, list, ReportSummary.Games(list).FirstOrDefault()); // stats leave benchmarks out
+                })
+                .OrderByDescending(g => g.Sessions[0].Started).ToList();
+
+    public DateTime LastPlayed => Sessions[0].Started;
+    public int Crashes => Sessions.Count(s => s.Crashed);
+    public bool HasCrashes => Crashes > 0;
+    public bool HasHeldBy => Stats?.HasHeldBy == true;
+    public string Avg => Stats?.Avg ?? "–";
+    public string Low => Stats?.Low ?? "–";
+    public string HeldBy => Stats?.HeldBy ?? "";
+
+    /// <summary>"12 sessions · 6 h 40 min played · last Yesterday 8:42 PM".</summary>
+    public string Summary
+    {
+        get
+        {
+            int runs = Sessions.Count(s => s.Benchmark), played = Sessions.Count - runs;
+            var parts = new List<string>();
+            if (played > 0) parts.Add(played == 1 ? "1 session" : $"{played} sessions");
+            if (runs > 0) parts.Add(runs == 1 ? "1 benchmark" : $"{runs} benchmarks");
+            if (Stats != null) parts.Add($"{Stats.Played} played");
+            string day = LastPlayed.Date == DateTime.Today ? "Today" : LastPlayed.Date == DateTime.Today.AddDays(-1) ? "Yesterday" : LastPlayed.ToString("d");
+            parts.Add($"last {day} {LastPlayed:t}");
+            return string.Join(" · ", parts);
+        }
+    }
+
+    public string CrashText => Crashes == 1 ? "1 crash" : $"{Crashes} crashes";
 }
 
 /// <summary>

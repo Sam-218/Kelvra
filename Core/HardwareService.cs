@@ -81,15 +81,26 @@ public sealed class HardwareService : IDisposable
         }
     }
 
-    /// <summary>Updates every device and returns all current readings. Slow (driver calls): call off the UI thread.</summary>
-    public List<SensorReading> Poll()
+    /// <summary>
+    /// Updates the devices <paramref name="due"/> picks (all when null) and returns their readings; the ids of the devices
+    /// left out go into <paramref name="skipped"/>. Slow (driver calls): call off the UI thread.
+    /// </summary>
+    public List<SensorReading> Poll(Func<string, HardwareType, bool>? due = null, HashSet<string>? skipped = null)
     {
         var list = new List<SensorReading>(256);
         lock (_lock)
         {
             if (!_opened) return list;
             foreach (IHardware hw in _computer.Hardware)
+            {
+                string id = hw.Identifier.ToString();
+                if (due != null && !due(id, hw.HardwareType))
+                {
+                    skipped?.Add(id);
+                    continue;
+                }
                 Collect(hw, hw, list, _controls);
+            }
         }
         return list;
     }

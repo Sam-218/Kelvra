@@ -40,11 +40,6 @@ public partial class MainWindow : Window
         SensorsPage.AddToOverlayRequested += OverlaysPage.AddSensor;
         OverlaysPage.Toast += ShowToast;
         SensorsPage.InstallPawnIoRequested += () => InstallPawnIo_Click(this, new RoutedEventArgs());
-        CategoriesPage.CategoryChosen += (hardware, type) =>
-        {
-            SensorsPage.SetFilter(hardware, type);
-            NavSensors.IsChecked = true;
-        };
 
         SetupAccentPicker();
         LoadSettingsUi();
@@ -56,6 +51,8 @@ public partial class MainWindow : Window
         UpdateGamingUi();
 
         _app.Overlays.StateChanged += UpdateOverlayControls;
+        SetupPalette();
+        SetupCrashBadge();
         _toastTimer.Tick += (_, _) => HideToast();
 
         foreach (var box in _shortcuts.Select(s => s.Box))
@@ -143,7 +140,7 @@ public partial class MainWindow : Window
             s.Box.Hotkey = text;
             bool same = text.Length > 0 && _shortcuts.Any(o => o != s && o.Get(settings) == text);
             s.Note.Text = error ?? (same ? "Another action uses the same shortcut." : Hotkey.Parse(text)?.Warning() ?? (text.Length == 0 ? "Off" : ""));
-            s.Note.Foreground = (System.Windows.Media.Brush)FindResource(error != null || same ? "HotBrush" : "MutedBrush");
+            s.Note.Foreground = (System.Windows.Media.Brush)FindResource(error != null || same ? "DangerBrush" : "MutedBrush");
         }
     }
 
@@ -211,12 +208,23 @@ public partial class MainWindow : Window
         if (SettingsPage == null) return; // during InitializeComponent (it's the last page created)
         OverviewPage.Visibility = NavOverview.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         SensorsPage.Visibility = NavSensors.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
-        CategoriesPage.Visibility = NavCategories.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         HistoryPage.Visibility = NavHistory.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        GamesPage.Visibility = NavGames.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        ReportsPage.Visibility = NavReports.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        CrashesPage.Visibility = NavCrashes.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        ChangesPage.Visibility = NavChanges.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         AlertsPage.Visibility = NavAlerts.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         SystemPage.Visibility = NavSystem.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
-        AppsPage.Visibility = NavApps.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
-        DiskPage.Visibility = NavDisk.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        // Processes and Startup are the two tabs of the Apps page, Disk and Cleanup two of the Disk page
+        bool apps = NavProcesses.IsChecked == true || NavStartup.IsChecked == true;
+        AppsPage.Visibility = apps ? Visibility.Visible : Visibility.Collapsed;
+        if (NavProcesses.IsChecked == true) AppsPage.ProcessesTab.IsChecked = true;
+        if (NavStartup.IsChecked == true) AppsPage.StartupTab.IsChecked = true;
+        bool disk = NavDisk.IsChecked == true || NavCleanup.IsChecked == true;
+        DiskPage.Visibility = disk ? Visibility.Visible : Visibility.Collapsed;
+        if (NavDisk.IsChecked == true && DiskPage.CleanupTab.IsChecked == true) DiskPage.AnalyzerTab.IsChecked = true;
+        if (NavCleanup.IsChecked == true) DiskPage.CleanupTab.IsChecked = true;
+        if (NavCrashes.IsChecked == true) MarkCrashesSeen();
         FansPage.Visibility = NavFans.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         OverlaysPage.Visibility = NavOverlays.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         SettingsPage.Visibility = NavSettings.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
@@ -290,6 +298,11 @@ public partial class MainWindow : Window
         CloseToTraySwitch.IsChecked = s.CloseToTray;
         MinimizeToTraySwitch.IsChecked = s.MinimizeToTray;
         KeepHistorySwitch.IsChecked = s.KeepHistory;
+        LongHistorySwitch.IsChecked = s.LongHistory;
+        AppNetworkSwitch.IsChecked = s.TrackAppNetwork;
+        foreach (RadioButton r in MinuteDaysButtons.Children)
+            r.IsChecked = int.Parse((string)r.Tag) == s.HistoryMinuteDays;
+        UpdateHistoryUi();
         UpdateHotkeyUi();
         StartWithWindowsSwitch.IsChecked = s.StartWithWindows;
         (s.Fahrenheit ? UnitFahrenheit : UnitCelsius).IsChecked = true;
@@ -376,6 +389,58 @@ public partial class MainWindow : Window
         ShowToast(_app.Settings.KeepHistory ? "History is now saved and kept for 24 hours" : "Saved history deleted");
     }
 
+    // ---------- long-term history ----------
+
+    private void LongHistory_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_syncingUi) return;
+        _app.Settings.LongHistory = LongHistorySwitch.IsChecked == true;
+        _app.ApplyHistorySettings();
+        _app.MarkDirty();
+        UpdateHistoryUi();
+    }
+
+    private void AppNetwork_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_syncingUi) return;
+        _app.Settings.TrackAppNetwork = AppNetworkSwitch.IsChecked == true;
+        _app.ApplyHistorySettings();
+        _app.MarkDirty();
+        UpdateHistoryUi();
+    }
+
+    private void MinuteDays_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_syncingUi || sender is not RadioButton rb) return;
+        _app.Settings.HistoryMinuteDays = int.Parse((string)rb.Tag);
+        _app.MarkDirty();
+    }
+
+    private void UpdateHistoryUi()
+    {
+        bool available = _app.Recorder != null;
+        LongHistorySwitch.IsEnabled = available;
+        AppNetworkSwitch.IsEnabled = available && _app.Settings.LongHistory;
+        if (_app.Settings.TrackAppNetwork && _app.Settings.LongHistory && _app.Recorder?.Apps.NetworkRunning == false)
+            AppNetworkNote.Text = IsAdmin ? "Windows didn't allow the network trace right now (see the log)." : "Needs Kelvra to run as administrator.";
+        long size = new[] { HistoryDb.DefaultFile, HistoryDb.DefaultFile + "-wal" }.Where(File.Exists).Sum(f => new FileInfo(f).Length);
+        HistorySizeText.Text = !available ? "history.db couldn't be opened (see the log)." : $"history.db: {ByteFormat.Format(size)}";
+    }
+
+    private async void ClearHistory_Click(object sender, RoutedEventArgs e)
+    {
+        if (_app.Recorder is not { } recorder) return;
+        if (MessageBox.Show(this, "Delete all recorded history (reports, app use, crashes and changes)?\nThis can't be undone.", "Clear history",
+                            MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK) return;
+        await recorder.ReadAsync(db =>
+        {
+            db.Clear();
+            return true;
+        });
+        UpdateHistoryUi();
+        ShowToast("History cleared");
+    }
+
     private void CopyDiagnostics_Click(object sender, RoutedEventArgs e)
     {
         var notes = HotkeyNotes().Append($"Saving settings: {_app.Settings.LastSaveError ?? "OK"}");
@@ -413,7 +478,7 @@ public partial class MainWindow : Window
             : game.Runner.Error is string error ? "Problem: " + error
             : game.ActiveGame is { } active ? $"Measuring {active.Name}."
             : "Waiting for a game.";
-        GameFpsStatus.Foreground = (System.Windows.Media.Brush)FindResource(game.Runner.Error != null && _app.Settings.GameFpsEnabled ? "HotBrush" : "MutedBrush");
+        GameFpsStatus.Foreground = (System.Windows.Media.Brush)FindResource(game.Runner.Error != null && _app.Settings.GameFpsEnabled ? "DangerBrush" : "MutedBrush");
         GameSeenText.Text = game.SeenApps.Count == 0 ? "" : "Seen drawing frames this time: " + string.Join(", ", game.SeenApps);
     }
 

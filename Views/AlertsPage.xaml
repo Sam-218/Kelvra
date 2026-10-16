@@ -15,7 +15,7 @@
         </Style>
     </UserControl.Resources>
 
-    <DockPanel Margin="28,24,28,20">
+    <DockPanel Margin="32,26,32,16">
         <Grid DockPanel.Dock="Top" Margin="0,0,0,16">
             <StackPanel>
                 <TextBlock Text="Alerts" Style="{StaticResource H1}" />
@@ -109,8 +109,8 @@
                                 </Border>
                                 <DataTemplate.Triggers>
                                     <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                        <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource HotBrush}" />
-                                        <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource HotBrush}" />
+                                        <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource CritBrush}" />
+                                        <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource CritBrush}" />
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding Enabled}" Value="False">
                                         <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource MutedBrush}" />

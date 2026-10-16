@@ -8,7 +8,23 @@ namespace Kelvra;
 public sealed class AppSettings
 {
     public static readonly string Dir =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Kelvra");
+        DataDirOverride() ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Kelvra");
+
+    /// <summary>Settings, history and logs live somewhere else than %APPDATA%\Kelvra (a Debug build started with KELVRA_DATA_DIR).</summary>
+    public static bool CustomDir => DataDirOverride() != null;
+
+    /// <summary>
+    /// Debug builds only: KELVRA_DATA_DIR points Kelvra at another data folder, so a development copy can be run and
+    /// screenshotted without touching the real settings and history. Release builds ignore it.
+    /// </summary>
+    private static string? DataDirOverride()
+    {
+#if DEBUG
+        return Environment.GetEnvironmentVariable("KELVRA_DATA_DIR") is { Length: > 0 } dir ? dir : null;
+#else
+        return null;
+#endif
+    }
     private static readonly string FilePath = Path.Combine(Dir, "settings.json");
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -54,7 +70,7 @@ public sealed class AppSettings
     public ObservableCollection<AlertRule> Alerts { get; set; } = new();
     public bool AlertSound { get; set; } = true;
 
-    // History page
+    // Live graphs page (the property names still say History: renaming them would lose saved settings)
     /// <summary>"All", "Category" or "Selected".</summary>
     public string HistoryMode { get; set; } = "Category";
     /// <summary>"hw:&lt;hardware category&gt;" or "type:&lt;sensor-type category&gt;".</summary>
@@ -64,6 +80,18 @@ public sealed class AppSettings
     public int LogIntervalSeconds { get; set; } = 1;
     /// <summary>Save the last 24 h of one-minute history to disk, so graphs survive a restart.</summary>
     public bool KeepHistory { get; set; }
+
+    // Long-term history (Reports, Crashes, Changes)
+    /// <summary>Record key sensors, app use, crashes and changes in history.db.</summary>
+    public bool LongHistory { get; set; } = true;
+    /// <summary>Days of minute-by-minute detail; day totals are kept for good.</summary>
+    public int HistoryMinuteDays { get; set; } = 30;
+    /// <summary>Count each app's internet use (a Windows network trace; needs admin rights).</summary>
+    public bool TrackAppNetwork { get; set; } = true;
+    /// <summary>When the Crashes page was last opened (unix seconds): newer crashes show as "N new" in the sidebar.</summary>
+    public long CrashesSeenUnix { get; set; }
+    /// <summary>Reports page: "Day", "Week", "Month" or "Year".</summary>
+    public string ReportRange { get; set; } = "Day";
 
     // Disk cleanup / duplicates
     /// <summary>Cleanup items the user unticked. The Recycle Bin starts unticked.</summary>
@@ -91,8 +119,14 @@ public sealed class AppSettings
     public bool MiniTopmost { get; set; } = true;
     public double? MiniLeft { get; set; }
     public double? MiniTop { get; set; }
-    public double MiniWidth { get; set; } = 340;
-    public double MiniHeight { get; set; } = 620;
+    public double MiniWidth { get; set; } = 360;
+    public double MiniHeight { get; set; } = 330;
+
+    /// <summary>
+    /// Which design the settings were last saved by (2 = Kelvra 2). Older files get the Kelvra 2 defaults once: the old
+    /// default accent (Amber) becomes Graphite and mini mode its new, shorter size. Colours people picked themselves stay.
+    /// </summary>
+    public int DesignVersion { get; set; }
 
     // Global shortcuts ("" = off). The old Ctrl+Shift+O/L took those keys away from Chrome, Excel and VS Code.
     public string HotkeyOverlays { get; set; } = Hotkey.DefaultOverlays;
@@ -169,8 +203,17 @@ public sealed class AppSettings
         if (HotkeyBenchmark is null || (HotkeyBenchmark.Length > 0 && !Hotkey.TryParse(HotkeyBenchmark, out _))) HotkeyBenchmark = Hotkey.DefaultBenchmark;
         if (LogIntervalSeconds is not (1 or 5 or 10 or 60)) LogIntervalSeconds = 1;
         if (DuplicateMinSizeMb is not (1 or 10 or 100)) DuplicateMinSizeMb = 1;
+        if (HistoryMinuteDays is not (7 or 30 or 90)) HistoryMinuteDays = 30;
+        if (ReportRange is not ("Day" or "Week" or "Month" or "Year")) ReportRange = "Day";
+        if (HistoryMode == "Games") HistoryMode = "Category"; // game sessions have their own page now
         Theme ??= "System";
         if (!Accents.IsKnown(Accent)) Accent = Accents.Default;
+        if (DesignVersion < 2)
+        {
+            if (string.Equals(Accent, "Amber", StringComparison.OrdinalIgnoreCase)) Accent = Accents.Default;
+            if (MiniHeight >= 600) (MiniWidth, MiniHeight) = (360, 330); // the old one-column size: Kelvra 2's mini is 2 x 2
+            DesignVersion = 2;
+        }
         HistoryMode ??= "Category";
         HistoryCategory ??= "hw:CPU";
         Alerts ??= new();

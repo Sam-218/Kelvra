@@ -30,7 +30,7 @@ public sealed class SensorVm : ObservableObject
         Update(r);
     }
 
-    /// <summary>Hardware category shown on the Categories page ("CPU", "GPU", …).</summary>
+    /// <summary>Hardware category for the Sensors filter chips and Live graphs ("CPU", "GPU", …).</summary>
     public string Category { get; }
     /// <summary>Sensor-type category ("Temperatures", "Load", …).</summary>
     public string TypeCategory { get; }
@@ -64,13 +64,38 @@ public sealed class SensorVm : ObservableObject
     /// <summary>0 = normal, 1 = warm, 2 = hot (colours overlay values when warning colours are on).</summary>
     public int Level { get => _level; private set => Set(ref _level, value); }
 
+    private Heat? _heat;
+    /// <summary>A temperature's band on the thermal scale (its colour in Kelvra 2); null for every other kind of sensor.</summary>
+    public Heat? Heat { get => _heat; private set => Set(ref _heat, value); }
+
     /// <summary>A fan/pump output Kelvra can drive (Fans page).</summary>
     public bool Controllable { get; }
 
     public bool IsGpu => HardwareType is HardwareType.GpuNvidia or HardwareType.GpuAmd or HardwareType.GpuIntel;
 
+    /// <summary>When the value was last read (Environment.TickCount64).</summary>
+    internal long UpdatedAt { get; private set; }
+
+    /// <summary>The last poll left this sensor's device out on purpose (see <see cref="PollScheduler"/>): the value is held, not new.</summary>
+    public bool Skipped { get; private set; }
+
+    /// <summary>The value, if the last poll read it (null when it was held over from an earlier poll).</summary>
+    public float? NewValue => Skipped ? null : Value;
+
+    /// <summary>
+    /// The value if it was read in the last poll or within <paramref name="maxAgeMs"/>: a device read only every few seconds
+    /// while Kelvra is in the tray still draws a line in the graphs, one read once a minute leaves a gap.
+    /// </summary>
+    public float? FreshValue(long maxAgeMs = 6500) =>
+        !Skipped || Environment.TickCount64 - UpdatedAt <= maxAgeMs ? Value : null;
+
+    /// <summary>The poll left this sensor's device out; it keeps its last value.</summary>
+    public void MarkSkipped() => Skipped = true;
+
     public void Update(SensorReading r)
     {
+        UpdatedAt = Environment.TickCount64;
+        Skipped = false;
         Value = r.Value;
         Min = r.Min;
         Max = r.Max;
@@ -78,6 +103,7 @@ public sealed class SensorVm : ObservableObject
         MinText = r.MinText;
         MaxText = r.MaxText;
         Level = LevelFor(Type, r.Value);
+        Heat = Type == SensorType.Temperature && r.Value is float t && !float.IsNaN(t) ? Thermal.Of(t) : null;
     }
 
     /// <summary>The sensor wasn't in the last poll: no value until it's back.</summary>
@@ -86,6 +112,7 @@ public sealed class SensorVm : ObservableObject
         Value = Min = Max = null;
         ValueText = MinText = MaxText = "-";
         Level = 0;
+        Heat = null;
     }
 
     /// <summary>Fixed limits on the raw value: 70/85 °C for temperatures, 80/95 % for load. Other types never warn.</summary>

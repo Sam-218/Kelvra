@@ -32,7 +32,7 @@ public sealed class OverlayWindow : Window
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
-        Topmost = true;
+        Topmost = !profile.OnDesktop;
         ShowInTaskbar = false;
         ShowActivated = false;
         ResizeMode = ResizeMode.NoResize;
@@ -92,8 +92,16 @@ public sealed class OverlayWindow : Window
     {
         switch (property)
         {
-            case nameof(OverlayProfile.X) or nameof(OverlayProfile.Y) or nameof(OverlayProfile.Enabled)
-                or nameof(OverlayProfile.Width) or nameof(OverlayProfile.Height):
+            case nameof(OverlayProfile.X) or nameof(OverlayProfile.Y):
+                // Set from the Overlays page (dragged in its preview): move there. A drag of the window itself already is.
+                if (_p.Anchor == OverlayAnchor.Custom && (Math.Abs(Left - _p.X) > 1 || Math.Abs(Top - _p.Y) > 1))
+                {
+                    _placing = true;
+                    (Left, Top) = ClampToScreen(_p.X, _p.Y);
+                    _placing = false;
+                }
+                return;
+            case nameof(OverlayProfile.Enabled) or nameof(OverlayProfile.Width) or nameof(OverlayProfile.Height):
                 return;
             case nameof(OverlayProfile.Anchor) or nameof(OverlayProfile.EdgeMargin) or nameof(OverlayProfile.Monitor):
                 PlaceAtAnchor();
@@ -101,6 +109,10 @@ public sealed class OverlayWindow : Window
             case nameof(OverlayProfile.Locked):
                 ApplyLock();
                 Rebuild();
+                return;
+            case nameof(OverlayProfile.OnDesktop):
+                Topmost = !_p.OnDesktop;
+                if (_hwnd != IntPtr.Zero) SetWindowPos(_hwnd, ZOrder, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
                 return;
             default:
                 Rebuild();
@@ -155,6 +167,9 @@ public sealed class OverlayWindow : Window
         return IntPtr.Zero;
     }
 
+    /// <summary>Above everything (an overlay), or below every window (a desktop widget).</summary>
+    private IntPtr ZOrder => _p.OnDesktop ? HWND_BOTTOM : HWND_TOPMOST;
+
     public void Rebuild()
     {
         _view.Rebuild(unlocked: !_p.Locked);
@@ -189,9 +204,10 @@ public sealed class OverlayWindow : Window
     public void UpdateValues()
     {
         _view.UpdateValues();
-        // Some fullscreen-borderless games push themselves above us; reassert topmost.
-        if (_hwnd != IntPtr.Zero)
-            SetWindowPos(_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        // Some fullscreen-borderless games push themselves above us; reassert topmost. A desktop widget goes back
+        // behind the windows (after a click brought it forward), unless it's unlocked for moving.
+        if (_hwnd != IntPtr.Zero && (!_p.OnDesktop || _p.Locked))
+            SetWindowPos(_hwnd, ZOrder, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
 
     /// <summary>
@@ -208,7 +224,7 @@ public sealed class OverlayWindow : Window
         _placing = true;
         try
         {
-            SetWindowPos(_hwnd, HWND_TOPMOST, x, y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE);
+            SetWindowPos(_hwnd, ZOrder, x, y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE);
         }
         finally
         {

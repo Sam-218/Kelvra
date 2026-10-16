@@ -12,18 +12,19 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="RadioButton">
-                    <Border x:Name="Bd" CornerRadius="4" Padding="10,4" BorderThickness="1"
-                            Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource LineBrush}">
+                    <Border x:Name="Bd" CornerRadius="12" Padding="10,3" BorderThickness="1"
+                            Background="Transparent" BorderBrush="{DynamicResource Line2Brush}">
                         <ContentPresenter VerticalAlignment="Center" />
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource MutedBrush}" />
                         </Trigger>
+                        <!-- Chosen: outlined in the text colour (Kelvra 2 keeps colour for heat) -->
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentFillBrush}" />
-                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentFillBrush}" />
-                            <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource TextBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+                            <Setter Property="FontWeight" Value="SemiBold" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -41,7 +42,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Border x:Name="Bd" CornerRadius="4" Padding="10,4,8,4" Background="{DynamicResource AccentFillBrush}">
+                    <Border x:Name="Bd" CornerRadius="12" Padding="10,3,8,3" Background="{DynamicResource AccentFillBrush}">
                         <StackPanel Orientation="Horizontal">
                             <ContentPresenter VerticalAlignment="Center" />
                             <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="9"
@@ -67,13 +68,13 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Border x:Name="Bd" CornerRadius="6" Padding="16,14" BorderThickness="1"
+                    <Border x:Name="Bd" CornerRadius="10" Padding="16,14" BorderThickness="1"
                             Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource LineBrush}">
                         <ContentPresenter />
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Line2Brush}" />
                             <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SurfaceAltBrush}" />
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
@@ -116,8 +117,8 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ContextMenu">
-                    <Border Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1"
-                            CornerRadius="6" Padding="4" MinWidth="200">
+                    <Border Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource Line2Brush}" BorderThickness="1"
+                            CornerRadius="10" Padding="4" MinWidth="200">
                         <ItemsPresenter />
                     </Border>
                 </ControlTemplate>

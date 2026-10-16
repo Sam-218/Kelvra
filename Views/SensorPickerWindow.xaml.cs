@@ -5,6 +5,7 @@ using System.Windows.Data;
 
 namespace Kelvra;
 
+/// <summary>A sensor row in the picker, ticked when it's (to be) part of the target.</summary>
 public sealed class PickItem
 {
     public PickItem(SensorVm sensor, bool alreadyAdded, bool editable)
@@ -21,6 +22,7 @@ public sealed class PickItem
     public string Label => IsEnabled ? Sensor.Name : $"{Sensor.Name}  (already added)";
 }
 
+/// <summary>Dialog to choose sensors (for an overlay, the Overview pins or Live graphs), grouped by device, with search.</summary>
 public partial class SensorPickerWindow : Window
 {
     private readonly List<PickItem> _items;

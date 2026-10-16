@@ -74,7 +74,7 @@ public partial class MiniWindow : Window
     private void OnUpdated()
     {
         var sensors = _app.Sensors;
-        LiveDot.Fill = (System.Windows.Media.Brush)FindResource(sensors.Error != null ? "HotBrush" : "GoodBrush");
+        LiveDot.Fill = (System.Windows.Media.Brush)FindResource(sensors.Error != null ? "DangerBrush" : "GoodBrush");
         if (!sensors.Loaded || !IsVisible) return;
 
         if (sensors.All.Count != _builtForCount)
@@ -96,6 +96,10 @@ public partial class MiniWindow : Window
         {
             panel.Update(sensors.All);
             card.From(panel);
+            var temp = panel.TempId != null ? sensors.ById.GetValueOrDefault(panel.TempId) : null;
+            card.Heat = temp?.Heat;
+            if (temp?.Value is float c) // whole degrees, as everywhere in Kelvra 2
+                card.Hero = SensorFormat.ToDisplay(LibreHardwareMonitor.Hardware.SensorType.Temperature, c).ToString("0");
         }
 
         Overview.UpdateMemory(_memory, sensors.All);
@@ -103,7 +107,7 @@ public partial class MiniWindow : Window
         {
             _memoryCard.Hero = _memory.Value.Replace(" %", "");
             _memoryCard.HeroUnit = "%";
-            _memoryCard.Stats[0].Value = _memory.Detail.Replace(" in use", "");
+            _memoryCard.Detail = _memoryCard.Stats[0].Value = _memory.Detail.Replace(" in use", "");
             _memoryCard.SparkId = sensors.All.FirstOrDefault(x => x.HardwareType == LibreHardwareMonitor.Hardware.HardwareType.Memory
                                                                  && x.Type == LibreHardwareMonitor.Hardware.SensorType.Load
                                                                  && !x.GroupName.Contains("Virtual"))?.Id;
@@ -115,6 +119,8 @@ public partial class MiniWindow : Window
             _networkCard.Hero = _network.Value;
             _networkCard.HeroUnit = "";
             _networkCard.Stats[0].Value = _network.Detail.TrimStart('↑', ' ');
+            _networkCard.Detail = _network.Detail;
+            _networkCard.SparkId = _network.SparkId;
         }
     }
 
@@ -153,8 +159,12 @@ public partial class MiniWindow : Window
 
     private void UpdateButtons()
     {
-        OverlaysButton.Style = (Style)FindResource(_app.Overlays.Visible ? "AccentButton" : typeof(System.Windows.Controls.Button));
-        OverlaysButton.Content = _app.Overlays.Visible ? "Overlays on" : "Overlays off";
-        LockButton.Content = _app.Overlays.AnyUnlocked ? "Lock overlays" : "Unlock to move";
+        bool on = _app.Overlays.Visible, unlocked = _app.Overlays.AnyUnlocked;
+        OverlaysButton.IsChecked = on;
+        OverlaysButton.Content = on ? "" : ""; // eye / eye crossed out
+        OverlaysButton.ToolTip = on ? "Overlays are on · click to hide them" : "Overlays are off · click to show them";
+        LockButton.IsChecked = unlocked;
+        LockButton.Content = unlocked ? "" : ""; // open / closed lock
+        LockButton.ToolTip = unlocked ? "Overlays can be moved · click to lock them" : "Overlays are locked · click to move them";
     }
 }

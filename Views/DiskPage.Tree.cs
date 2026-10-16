@@ -86,6 +86,7 @@ public sealed class DiskRow : ObservableObject
     }
 }
 
+/// <summary>The Disk page's folder tree: folders expand into rows on demand, very large folders are capped.</summary>
 public partial class DiskPage
 {
     /// <summary>Folders with more entries than this show the rest as a single "… more" row.</summary>

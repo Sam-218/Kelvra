@@ -28,7 +28,7 @@
             </TextBlock>
         </Border>
 
-        <TextBlock x:Name="ErrorText" Foreground="{DynamicResource HotBrush}" TextWrapping="Wrap" Margin="0,12,0,0"
+        <TextBlock x:Name="ErrorText" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap" Margin="0,12,0,0"
                    Visibility="Collapsed" />
 
         <Grid Margin="0,22,0,0">

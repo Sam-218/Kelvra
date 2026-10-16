@@ -47,6 +47,9 @@ public sealed class OverlayManager
 
     public bool AnyUnlocked => _settings.Overlays.Any(p => p.Enabled && !p.Locked);
 
+    /// <summary>Sensors of the overlays on screen right now (the poll keeps their devices fresh while Kelvra is in the tray).</summary>
+    public IEnumerable<string> ShownSensorIds => _windows.Keys.SelectMany(p => p.Items).Select(i => i.SensorId);
+
     public void ToggleLockAll()
     {
         bool lockAll = AnyUnlocked;

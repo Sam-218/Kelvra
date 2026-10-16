@@ -11,19 +11,28 @@
 
 ## Features
 
+**Kelvra 2: colour means heat.** Everything is calm graphite; the only colours are the thermal scale – blue below 40 °C, green to 69, amber to 81, orange to 91, red at 92 or at your own alert limit – so a glance tells you what's hot. Each page opens with a plain answer ("All quiet.", "A calm week, one hiccup."), the sidebar is labelled, and `Ctrl+K` searches everything: sensors (graph, pin, alert or fan curve from there), pages and actions.
+
 **Monitoring**
-- **Overview** – an instrument panel per CPU and GPU (temperature, load, clock, power with their min–max and a graph), the sensors you pinned with a trend line each, and memory / system drive / network at a glance.
+- **Overview** – a sentence that says whether your PC is fine, then a panel per CPU and GPU: the temperature big and in its heat colour, its range over the last 5 minutes, hour or day, load, clock and power with a sparkline each, *thermal headroom* to its limit, and a chart of temperature and load. Below: *Worth knowing* from this week's report, your pinned sensors, and memory / system drive / network.
 - **Sensors** – every sensor LibreHardwareMonitor can read (CPU, GPU, RAM, motherboard, drives, network…) with current / min / max, search, filter chips, foldable device groups you can reorder by drag & drop, and sortable columns.
-- **Categories** – one tile per hardware type and sensor type with a live headline (e.g. *GPU 47 °C · 2 %*, *Hottest 55 °C*). Click to filter.
-- **History** – graphs of up to 24 hours (every second for the last hour, one-minute averages before that) for everything, a category, or your own selection. Hover for exact values. Optionally kept on disk so graphs survive a restart. *Reset min/max* on the Sensors page starts the extremes over.
+- **Live graphs** – graphs of up to 24 hours (every second for the last hour, one-minute averages before that) for everything, a category, or your own selection. Hover for exact values. Optionally kept on disk so graphs survive a restart. *Reset min/max* on the Sensors page starts the extremes over.
 - **CSV logging** – record whatever you're graphing to a CSV file.
 - **Alerts** – Windows toast notifications (Action Center) when a sensor stays above/below a limit (e.g. *GPU hotter than 85 °C for 5 s*), with cooldown and sound.
 - **System summary** – Windows version, CPU, GPU & driver, RAM sticks (and whether XMP / EXPO looks off), board & BIOS, each drive's type, free space, health, temperature and lifetime reads/writes, and network in one page – with a *Copy summary* button for forum posts. The cards sit on an invisible snap grid (it shows as faint dots while you move one) and handle like windows: drag one by its header to any spot, empty ones too – the cards in its way move down – and drag its right or bottom edge or its corner to resize it (two cards side by side share their edge, like snapped windows). Edges snap to the grid and line up with the cards nearby; a card dropped next to another snaps to it. Double-click an edge to fill up to the next card or fit the content, *Tidy up* closes the gaps, and the ⋯ menu has sizes and moves without a mouse.
-- **Mini mode** – a small, optionally always-on-top window with CPU, GPU, memory and network, for a second screen.
-- °C / °F, dark / light / system theme, and any accent colour you like (full colour picker with Kelvra's presets and your Windows accent colour; text and lines in it stay readable on both themes).
+- **Mini mode** – a small, optionally always-on-top 2 × 2 window with CPU, GPU, memory and network in their heat colours, plus buttons to show or lock the overlays, for a second screen.
+- °C / °F, dark / light / system theme, and an accent for buttons and selections: *Graphite* (the default, plain white or black) or any colour you like (full colour picker with Kelvra's presets and your Windows accent colour; text and lines in it stay readable on both themes).
+
+**History (kept for months and years)**
+- **Reports** – any day, week, month or year, summed up in a sentence: PC time (and how it compares to the period before), CPU / GPU temperature (average and peak, when, and which app was in front then), crashes, a temperature chart (by the minute for a day, by the hour for a week, by the day for longer) with crashes, driver updates and the GPU limit marked on it, *Copy summary* for a forum post, the apps you used with the temperatures while each was in front and what each downloaded and uploaded, and the games you played (time, average FPS, 1 % low, and whether the GPU, the CPU or a frame cap held them back). *Worth knowing* points out what matters: crashes, time spent at or over your own alert limits (and which app was in front), a game running clearly hotter or cooler than in the 30 days before, a fan turning slower at the same speed setting than months ago, and driver updates with how your games ran since.
+- **Crashes** – app crashes and freezes, graphics driver resets, blue screens and sudden shutdowns from Windows' event logs, each in plain words with what to try, what the hardware was doing in the 5 minutes before, and a hint when one culprit (e.g. the NVIDIA driver) keeps coming back. A game session that ended in a crash is marked; driver resets and blue screens also send a notification.
+- **Changes** – a day-by-day timeline of graphics drivers, Windows updates and builds, the BIOS, apps installed / updated / removed and startup items, with *how your games ran since* under each driver change (same game, before vs. after).
+- **Fan health** – a notification when a fan that was spinning stops while it's driven at 30 % or more.
+- Recorded in the background, also from the tray, into `%APPDATA%\Kelvra\history.db` (SQLite): key sensors, the sensors your alerts, overlays, fan curves and pinned graphs use, app use, crashes and changes. Minute detail is kept 7 / 30 / 90 days, day totals for good. *Settings → History* turns it off, changes how long detail stays, or clears it.
+- In the tray Kelvra reads only what's needed: the devices your on-screen overlays, alerts and fan curves use every refresh, the recorded ones every 5 s, drives at most every 10 s, and the rest once a minute.
 
 **Fan control**
-- Per fan output: *Automatic* (BIOS/driver), a *fixed speed*, or a *curve* that follows any temperature sensor – drag the points, or type them.
+- Per fan output: *Automatic* (BIOS/driver), a *fixed speed*, or a *curve* that follows any temperature sensor – drag the points, or type them; *Silent*, *Balanced* or *Performance* to start from. The list shows each fan's speed live and marks one that turns clearly slower than it did 1–4 months ago.
 - Safety built in: a minimum speed, 100 % above a critical temperature, gentle slow-down with hysteresis, and fans go back to BIOS control when Kelvra exits, crashes, you sign out, or the temperature sensor disappears.
 - Motherboard fans need administrator rights and the PawnIO driver; some laptops and ready-made PCs don't allow software fan control.
 
@@ -33,6 +42,7 @@
 - Layouts: list, one line, or tiles in up to six columns, with adjustable spacing, headers and units.
 - Per sensor: custom label (or none), its own colour, decimal places, a fill bar, a mini graph, and its own warning limits; warning colours and limits per overlay.
 - Position: drag it anywhere, or pin it to any corner or edge of any monitor.
+- **Desktop widget**: an overlay can sit on the desktop behind your windows instead of on top of everything.
 - Click-through while locked; `Ctrl+Alt+F11` unlocks them for dragging, `Ctrl+Alt+F10` shows/hides them. Both shortcuts can be changed (or turned off) under *Settings → Shortcuts*, which also warns when another program uses the same keys.
 - Templates: Gaming, Essentials, Temperatures, Compact bar. Export an overlay to a `.kelvra-overlay.json` file and import ones others shared.
 
@@ -46,7 +56,7 @@
   - **frame generation** from the driver (AMD Fluid Motion Frames, Intel XeSS-FG), with the FPS the game renders itself
 - Frame generation and upscalers: FPS counts every frame that reaches the screen, generated ones included, like NVIDIA's and AMD's own overlays. DLSS / FSR / XeSS upscaling doesn't change how frames are counted. When the GPU paces the frames itself (DLSS 4 flip metering, FSR frame generation), frame times, lows and stutters follow the screen's updates instead of the bunched presents, so they aren't shown worse than they look. NVIDIA Smooth Motion and Lossless Scaling generate frames PresentMon can't see; there FPS is the game's own rate.
 - FPS values are also a *Game* device in the sensor list, so normal overlays, History graphs, alerts (*FPS below 30*) and CSV logging work with them.
-- **Game sessions** (History): a summary of every game you played – average FPS, lows, stutters, what limited it, hottest CPU / GPU.
+- **Game sessions** (Games page): a summary of every game you played – average FPS, lows, stutters, what limited it, hottest CPU / GPU.
 - **Benchmark**: `Ctrl+Alt+F9` records a run and saves its summary plus every frame as CSV.
 - Windowed games can be marked under *Settings → Gaming*. Overlays can't draw over true exclusive fullscreen; borderless and most modern games work.
 
@@ -97,22 +107,24 @@ dotnet publish Kelvra.csproj -c Release -p:PublishSingleFile=true -p:IncludeNati
 ## Project layout
 
 ```
-Core/        data model: sensors, settings, overlay profiles, disk scanner, alert rules
-Services/    sensor polling, history, alerts, CSV logging, overlays, processes, startup apps,
+Core/        data model: sensors, settings, overlay profiles, disk scanner, alert rules,
+             poll scheduler, reports and insights, crash explanations, fan health, change effects
+Services/    sensor polling, live and long-term history (history.db), alerts, CSV logging, overlays,
+             processes, app use and network trace, crash and change watchers, startup apps,
              cleanup, duplicate finder, system info, autostart, PawnIO installer, tray icon
-Views/       WPF pages and windows (one page per sidebar entry)
+Views/       WPF pages and windows (one page per sidebar entry: Monitor, Gaming, History, Tools)
 Themes/      dark/light colours and control styles
-Assets/      app icon
+Assets/      app icon, crash-explain.json (what crash records mean, in plain words)
 tests/       xUnit tests (logic, disk tools, safety and security checks)
 ```
 
-Settings are stored in `%APPDATA%\Kelvra\settings.json` (saved history in `history.bin` next to it, a small error log in `logs\`); CSV logs go to `Documents\Kelvra Logs`.
+Settings are stored in `%APPDATA%\Kelvra\settings.json` (the live graphs' saved 24 hours in `history.bin` next to it, the long-term history in `history.db`, a small error log in `logs\`); CSV logs go to `Documents\Kelvra Logs`. The history never leaves your PC; per-app network use counts bytes only, never addresses or content.
 Kelvra has no telemetry. Its only network connection is the daily update check: it asks GitHub for the latest release, and nothing about your PC is sent. You can turn it off under *Settings → About*. *Settings → About → Copy diagnostics* puts versions, detected hardware and the end of the log on your clipboard for a bug report (your user name is removed); nothing is sent anywhere.
 
 ## Uninstall
 
 1. Turn off *Settings → Start with Windows* (removes the sign-in task), then exit Kelvra from the tray.
-2. Delete `Kelvra.exe` and the folders `%APPDATA%\Kelvra` (settings) and `Documents\Kelvra Logs` (CSV logs).
+2. Delete `Kelvra.exe` and the folders `%APPDATA%\Kelvra` (settings and history) and `Documents\Kelvra Logs` (CSV logs).
 3. Optional: uninstall **PawnIO** under *Windows Settings → Apps* if no other program (e.g. FanControl, LibreHardwareMonitor) uses it.
 
 ## Credits

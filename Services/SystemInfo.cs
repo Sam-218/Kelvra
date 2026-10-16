@@ -141,6 +141,14 @@ public static class SystemInfo
         pnpDeviceId.Contains("VEN_1002", StringComparison.OrdinalIgnoreCase) ||
         pnpDeviceId.Contains("VEN_8086", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>Each graphics adapter with its driver version as its maker writes it (NVIDIA "617.14", others Windows' number).</summary>
+    public static List<(string Adapter, string Version)> GpuDrivers() =>
+        Query("SELECT Name, DriverVersion FROM Win32_VideoController")
+            .Select(g => (Str(g, "Name"), Str(g, "DriverVersion")))
+            .Where(g => g.Item1.Length > 0)
+            .Select(g => (g.Item1, NvidiaVersion(g.Item1, g.Item2) ?? g.Item2))
+            .ToList();
+
     /// <summary>NVIDIA's own version ("617.14") from the Windows driver version (32.0.16.1714); null for other vendors.</summary>
     internal static string? NvidiaVersion(string adapter, string windowsVersion)
     {

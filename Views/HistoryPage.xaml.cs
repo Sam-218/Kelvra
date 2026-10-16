@@ -6,7 +6,7 @@ using System.Windows.Media;
 
 namespace Kelvra;
 
-/// <summary>Sensor graphs: everything, one category, or your own selection. Also starts/stops CSV logging.</summary>
+/// <summary>Live graphs (the last 24 h): everything, one category, or your own selection. Also starts/stops CSV logging.</summary>
 public partial class HistoryPage : UserControl
 {
     private static readonly Dictionary<string, Color> CategoryColors = new()
@@ -37,7 +37,7 @@ public partial class HistoryPage : UserControl
         var s = _app.Settings;
         foreach (RadioButton r in RangeButtons.Children)
             r.IsChecked = int.Parse((string)r.Tag) == s.HistoryMinutes;
-        (s.HistoryMode switch { "All" => ModeAll, "Selected" => ModeSelected, "Games" => ModeGames, _ => ModeCategory }).IsChecked = true;
+        (s.HistoryMode switch { "All" => ModeAll, "Selected" => ModeSelected, _ => ModeCategory }).IsChecked = true;
         _loading = false;
 
         IsVisibleChanged += (_, _) =>
@@ -49,31 +49,25 @@ public partial class HistoryPage : UserControl
             if (IsVisible && _app.Sensors.All.Count != _builtForCount) Rebuild();
         };
         _app.Logger.StateChanged += UpdateRecording;
-        _app.GameSessionsChanged += () =>
-        {
-            if (IsVisible && _app.Settings.HistoryMode == "Games") Rebuild();
-        };
         UpdateRecording();
     }
 
     private TimeSpan Range => TimeSpan.FromMinutes(_app.Settings.HistoryMinutes);
+
+    /// <summary>Shows the saved mode and selection again (the Ctrl K palette changed them).</summary>
+    public void Reload()
+    {
+        _loading = true;
+        (_app.Settings.HistoryMode switch { "All" => ModeAll, "Selected" => ModeSelected, _ => ModeCategory }).IsChecked = true;
+        _loading = false;
+        Rebuild();
+    }
 
     // ---------- building the chart list ----------
 
     private void Rebuild()
     {
         var s = _app.Settings;
-        bool games = s.HistoryMode == "Games";
-        SessionsScroller.Visibility = games ? Visibility.Visible : Visibility.Collapsed;
-        Scroller.Visibility = games ? Visibility.Collapsed : Visibility.Visible;
-        SearchBox.Visibility = games ? Visibility.Collapsed : Visibility.Visible;
-        if (games)
-        {
-            _builtForCount = _app.Sensors.All.Count; // so new sensors don't reload the list every poll
-            ShowGameSessions();
-            return;
-        }
-
         if (!_app.Sensors.Loaded) return;
         _builtForCount = _app.Sensors.All.Count;
         var selected = new HashSet<string>(s.HistorySelected);
@@ -110,34 +104,6 @@ public partial class HistoryPage : UserControl
             ? "No sensors selected yet.\nClick “Choose sensors”, or the ☆ on any graph in All / Categories."
             : "No graphs match.";
         EmptyText.Visibility = _items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    private void ShowGameSessions()
-    {
-        CategoryPanel.Visibility = Visibility.Collapsed;
-        ChooseButton.Visibility = Visibility.Collapsed;
-        List<GameSessionSummary> sessions;
-        try
-        {
-            sessions = GameSessionLog.Load(GameSessionLog.DefaultFile);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            Log.Error("Reading game sessions", ex);
-            sessions = new();
-        }
-        SessionsList.ItemsSource = sessions;
-        string key = _app.Settings.HotkeyBenchmark.Length > 0 ? $" ({_app.Settings.HotkeyBenchmark})" : "";
-        EmptyText.Text = _app.Settings.GameFpsEnabled
-            ? $"No game sessions yet.\nPlay a game for a while (it's saved when the game closes), or record a benchmark with the benchmark shortcut{key}."
-            : "FPS measuring is off. Turn it on in Settings → Gaming to keep game sessions.";
-        EmptyText.Visibility = sessions.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    private void OpenSessionCsv_Click(object sender, RoutedEventArgs e)
-    {
-        if ((sender as FrameworkElement)?.DataContext is GameSessionSummary { CsvFile: { } file } && File.Exists(file))
-            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{file}\"") { UseShellExecute = true });
     }
 
     private IEnumerable<SensorVm> InCategory(string key)
@@ -192,7 +158,7 @@ public partial class HistoryPage : UserControl
     private void Mode_Checked(object sender, RoutedEventArgs e)
     {
         if (_loading || sender is not RadioButton rb) return;
-        _app.Settings.HistoryMode = rb == ModeAll ? "All" : rb == ModeSelected ? "Selected" : rb == ModeGames ? "Games" : "Category";
+        _app.Settings.HistoryMode = rb == ModeAll ? "All" : rb == ModeSelected ? "Selected" : "Category";
         _app.MarkDirty();
         Rebuild();
     }

@@ -2,7 +2,7 @@ using LibreHardwareMonitor.Hardware;
 
 namespace Kelvra;
 
-/// <summary>How sensors are bucketed on the Categories page and in the Sensors filter chips.</summary>
+/// <summary>How sensors are bucketed in the Sensors filter chips and the Live graphs categories.</summary>
 public static class SensorCategories
 {
     public sealed record Info(string Name, string Icon);

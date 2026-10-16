@@ -28,23 +28,24 @@ public static class GameOverlay
         (FrameGenId, "Frame generation"),
     };
 
-    public sealed record Module(string Key, string Name, string Description, string[] Ids);
+    /// <summary>A switch on a gaming overlay: <see cref="Hint"/> is the few words next to it on the Overlays page.</summary>
+    public sealed record Module(string Key, string Name, string Description, string[] Ids, string Hint = "");
 
     /// <summary>The switches in display order. "hardware" gets its sensors from what was detected (see <see cref="HardwareIds"/>).</summary>
     public static readonly Module[] Modules =
     {
-        new("fps", "FPS", "Frames per second right now.", new[] { GameSensors.FpsId }),
-        new("frametime", "Frametime", "Milliseconds per frame (lower is smoother).", new[] { GameSensors.FrameTimeId }),
-        new("lows", "1% and 0.1% lows", "FPS of the slowest frames over the last minute – how bad the dips get.", new[] { GameSensors.Low1Id, GameSensors.Low01Id }),
-        new("range", "Average / min / max", "FPS over this game session.", new[] { RangeId }),
-        new("graph", "Frametime graph", "Every frame of the last 10 seconds; spikes are stutters.", new[] { FrameTimesId }),
-        new("stutters", "Stutters", "Frames that took much longer than the ones around them.", new[] { StuttersId }),
-        new("bound", "Bottleneck", "Whether the GPU or the CPU limits the frame rate, or a limiter / VSync caps it.", new[] { BoundId }),
-        new("latency", "Latency", "How old a frame is when it reaches the screen: from your input (games with NVIDIA Reflex) or from the start of the frame until it's shown.", new[] { GameSensors.LatencyId }),
-        new("framegen", "Frame generation", "Frames AMD Fluid Motion Frames or Intel XeSS-FG generate in the driver, and the FPS the game renders itself. DLSS and FSR frame generation inside a game count as normal frames, like on NVIDIA's and AMD's overlays.", new[] { FrameGenId }),
-        new("name", "Game name", "Which game is being measured (shows ● REC while a benchmark records).", new[] { NameId }),
-        new("session", "Play time", "How long this game has been running.", new[] { GameSensors.SessionId }),
-        new("hardware", "CPU and GPU", "Load and temperature of the CPU and GPU, and VRAM.", Array.Empty<string>()),
+        new("fps", "FPS", "Frames per second right now.", new[] { GameSensors.FpsId }, "big number"),
+        new("frametime", "Frametime", "Milliseconds per frame (lower is smoother).", new[] { GameSensors.FrameTimeId }, "ms per frame"),
+        new("lows", "1% and 0.1% lows", "FPS of the slowest frames over the last minute – how bad the dips get.", new[] { GameSensors.Low1Id, GameSensors.Low01Id }, "last minute"),
+        new("range", "Average / min / max", "FPS over this game session.", new[] { RangeId }, "this session"),
+        new("graph", "Frametime graph", "Every frame of the last 10 seconds; spikes are stutters.", new[] { FrameTimesId }, "with stutters"),
+        new("stutters", "Stutters", "Frames that took much longer than the ones around them.", new[] { StuttersId }, "count"),
+        new("bound", "Bottleneck", "Whether the GPU or the CPU limits the frame rate, or a limiter / VSync caps it.", new[] { BoundId }, "GPU / CPU / cap"),
+        new("latency", "Latency", "How old a frame is when it reaches the screen: from your input (games with NVIDIA Reflex) or from the start of the frame until it's shown.", new[] { GameSensors.LatencyId }, "Reflex games"),
+        new("framegen", "Frame generation", "Frames AMD Fluid Motion Frames or Intel XeSS-FG generate in the driver, and the FPS the game renders itself. DLSS and FSR frame generation inside a game count as normal frames, like on NVIDIA's and AMD's overlays.", new[] { FrameGenId }, "AFMF / XeSS-FG"),
+        new("name", "Game name", "Which game is being measured (shows ● REC while a benchmark records).", new[] { NameId }, "and REC"),
+        new("session", "Play time", "How long this game has been running.", new[] { GameSensors.SessionId }, "this session"),
+        new("hardware", "CPU and GPU", "Load and temperature of the CPU and GPU, and VRAM.", Array.Empty<string>(), "load and temperature"),
     };
 
     /// <summary>Modules a new gaming overlay starts with.</summary>

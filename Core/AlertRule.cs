@@ -77,6 +77,7 @@ public sealed class AlertRule : ObservableObject
     }
 }
 
+/// <summary>An alert that fired, as the Alerts page's "Recent alerts" list and the notification show it.</summary>
 public sealed record AlertEvent(DateTime Time, string Title, string Message)
 {
     public string TimeText => Time.ToString("HH:mm:ss");
