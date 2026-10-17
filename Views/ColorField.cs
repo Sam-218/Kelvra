@@ -44,9 +44,10 @@ public sealed class ColorField : UserControl
     {
         _swatch = new Border
         {
-            Width = 30,
-            Height = 30,
-            CornerRadius = new CornerRadius(7),
+            Width = 20,
+            Height = 20,
+            Margin = new Thickness(6, 0, 0, 0),
+            CornerRadius = new CornerRadius(5),
             BorderThickness = new Thickness(1),
             Cursor = Cursors.Hand,
             ToolTip = "Pick any colour",
@@ -62,7 +63,26 @@ public sealed class ColorField : UserControl
             e.Handled = true;
         };
 
-        _hex = new TextBox { Width = 96, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        // the hex text sits in the same box as the swatch: a bare text box, the box's border shows focus
+        var bare = new ControlTemplate(typeof(TextBox));
+        var host = new FrameworkElementFactory(typeof(ScrollViewer), "PART_ContentHost");
+        host.SetValue(FocusableProperty, false);
+        host.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
+        host.SetValue(ScrollViewer.HorizontalScrollBarVisibilityProperty, ScrollBarVisibility.Hidden);
+        host.SetValue(ScrollViewer.VerticalScrollBarVisibilityProperty, ScrollBarVisibility.Hidden);
+        bare.VisualTree = host;
+        _hex = new TextBox
+        {
+            Template = bare,
+            Background = Brushes.Transparent,
+            Margin = new Thickness(8, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 12,
+            MaxLength = 9,
+            CharacterCasing = CharacterCasing.Upper,
+        };
+        _hex.SetResourceReference(TextBox.FontFamilyProperty, "MonoFont");
+        System.Windows.Automation.AutomationProperties.SetName(_hex, "Colour as hex");
         _hex.LostKeyboardFocus += (_, _) => CommitHex();
         _hex.KeyDown += (_, e) =>
         {
@@ -88,9 +108,28 @@ public sealed class ColorField : UserControl
         popupBorder.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush");
         popupBorder.SetResourceReference(Border.BorderBrushProperty, "LineBrush");
 
+        var row = new Grid();
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition());
+        Grid.SetColumn(_hex, 1);
+        row.Children.Add(_swatch);
+        row.Children.Add(_hex);
+        var box = new Border
+        {
+            Height = 32,
+            MinWidth = 104,
+            CornerRadius = new CornerRadius(6),
+            BorderThickness = new Thickness(1),
+            Child = row,
+        };
+        box.SetResourceReference(Border.BackgroundProperty, "InputBrush");
+        box.SetResourceReference(Border.BorderBrushProperty, "Line2Brush");
+        _hex.GotKeyboardFocus += (_, _) => box.SetResourceReference(Border.BorderBrushProperty, "AccentBrush");
+        _hex.LostKeyboardFocus += (_, _) => box.SetResourceReference(Border.BorderBrushProperty, "Line2Brush");
+
         _popup = new Popup
         {
-            PlacementTarget = _swatch,
+            PlacementTarget = box,
             Placement = PlacementMode.Bottom,
             VerticalOffset = 4,
             StaysOpen = false,
@@ -113,11 +152,8 @@ public sealed class ColorField : UserControl
             e.Handled = true;
         };
 
-        var panel = new StackPanel { Orientation = Orientation.Horizontal };
-        panel.Children.Add(_swatch);
-        panel.Children.Add(_hex);
-        panel.Children.Add(_popup);
-        Content = panel;
+        row.Children.Add(_popup);
+        Content = box;
 
         Refresh();
     }

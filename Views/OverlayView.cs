@@ -441,7 +441,7 @@ public sealed class OverlayView : Border
 
             if (cell.Label != null)
             {
-                string label = cell.Item.Label ?? s?.OverlayLabel ?? extra ?? (_store.Loaded ? "?" : "…");
+                string label = cell.Item.Label ?? s?.OverlayLabel ?? extra ?? GameOverlay.GameValueName(id) ?? (_store.Loaded ? "?" : "…");
                 if (cell.Label.Text != label) cell.Label.Text = label;
             }
             if (cell.Frames != null) continue; // draws itself

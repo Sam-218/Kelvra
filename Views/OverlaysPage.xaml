@@ -281,17 +281,19 @@
                         </StackPanel>
                     </UniformGrid>
 
-                    <!-- shows -->
-                    <Grid Margin="0,6,0,4">
-                        <TextBlock Text="SHOWS" Style="{StaticResource Overline}" VerticalAlignment="Center" />
-                        <Button Style="{StaticResource GhostButton}" HorizontalAlignment="Right" Padding="6,2" MinHeight="0" Click="AddSensors_Click"
-                                ToolTip="Add sensors, clocks or game numbers">
+                    <!-- shows: folds away like the sections below; "+ Sensor" sits left of the chevron -->
+                    <Grid Margin="0,2,0,0">
+                        <ToggleButton x:Name="ShowsSection" Style="{StaticResource SectionToggle}" Content="SHOWS" IsChecked="True"
+                                      ToolTip="Show or hide the list" AutomationProperties.Name="Shows" />
+                        <Button Style="{StaticResource GhostButton}" HorizontalAlignment="Right" VerticalAlignment="Center" Padding="6,2" MinHeight="0"
+                                Margin="0,1,22,0" Click="AddSensors_Click" ToolTip="Add sensors, clocks or game numbers">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE710;" Style="{StaticResource Icon}" FontSize="11" Margin="0,0,6,0" />
                                 <TextBlock Text="Sensor" FontSize="12" />
                             </StackPanel>
                         </Button>
                     </Grid>
+                    <StackPanel Visibility="{Binding IsChecked, ElementName=ShowsSection, Converter={StaticResource BoolToVis}}" Margin="0,0,0,14">
 
                     <!-- a gaming overlay: one switch per module -->
                     <ItemsControl x:Name="ModuleList" Focusable="False" Visibility="Collapsed">
@@ -438,9 +440,10 @@
                                  ToolTip="Type a country, state or city and press Enter to add its local time" AutomationProperties.Name="Clock for a place" />
                         <Button Grid.Column="1" Content="Add" Click="AddPlace_Click" Margin="6,0,0,0" ToolTip="Add a clock for this place" />
                     </Grid>
+                    </StackPanel>
 
                     <!-- ===== everything else, folded ===== -->
-                    <ToggleButton x:Name="TextSection" Style="{StaticResource SectionToggle}" Content="TEXT" Margin="0,14,0,0" />
+                    <ToggleButton x:Name="TextSection" Style="{StaticResource SectionToggle}" Content="TEXT" />
                     <StackPanel Visibility="{Binding IsChecked, ElementName=TextSection, Converter={StaticResource BoolToVis}}">
                         <TextBlock Text="Label font" Style="{StaticResource SideLabel}" Margin="0,0,0,4" />
                         <ComboBox x:Name="FontBox" SelectedValue="{Binding FontFamily}" SelectedValuePath="Tag" IsTextSearchEnabled="True"

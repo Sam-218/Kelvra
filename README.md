@@ -74,9 +74,9 @@
 |---|---|
 | ![Overview](docs/screenshots/overview.png) | ![Fans](docs/screenshots/fans.png) |
 
-| Overlay editor | History |
+| Overlay editor | Reports |
 |---|---|
-| ![Overlay editor](docs/screenshots/overlays.png) | ![History](docs/screenshots/history.png) |
+| ![Overlay editor](docs/screenshots/overlays.png) | ![Reports](docs/screenshots/reports.png) |
 
 ## Download
 

@@ -258,6 +258,14 @@ public class FanAndOverlayTests : IDisposable
         Assert.Equal("Graphite", Accents.Find(null).Name);
     }
 
+    [Fact]
+    public void Measured_game_values_have_a_name_while_no_game_runs()
+    {
+        Assert.Equal("Frametime", GameOverlay.GameValueName(GameSensors.FrameTimeId));
+        Assert.Equal("Latency", GameOverlay.GameValueName(GameSensors.LatencyId));
+        Assert.Null(GameOverlay.GameValueName(GameSensors.Low1Id)); // the lows share a module: they have their own labels
+    }
+
     // ---------- fans page: drafts ----------
 
     [Fact]

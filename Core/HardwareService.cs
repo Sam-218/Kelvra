@@ -99,10 +99,22 @@ public sealed class HardwareService : IDisposable
                     skipped?.Add(id);
                     continue;
                 }
+                int first = list.Count;
                 Collect(hw, hw, list, _controls);
+                if (hw.HardwareType == HardwareType.GpuNvidia) AddNvmlPower(hw, id, list, first);
             }
         }
         return list;
+    }
+
+    /// <summary>A "GPU Package" power sensor from the driver's power samples when the card has none (see <see cref="NvmlPower"/>).</summary>
+    private static void AddNvmlPower(IHardware hw, string id, List<SensorReading> list, int first)
+    {
+        for (int i = first; i < list.Count; i++)
+            if (list[i].Type == SensorType.Power) return;
+        int index = int.TryParse(id[(id.LastIndexOf('/') + 1)..], out int n) ? n : 0; // "/gpu-nvidia/0"
+        if (NvmlPower.Read(id, index, hw.Name) is { } w)
+            list.Add(new SensorReading($"{id}/power/nvml", id, hw.Name, hw.HardwareType, "GPU Package", SensorType.Power, w.Value, w.Min, w.Max));
     }
 
     // ---------- fan control ----------
@@ -167,6 +179,7 @@ public sealed class HardwareService : IDisposable
         {
             if (!_opened) return;
             foreach (IHardware hw in _computer.Hardware) ResetMinMax(hw);
+            NvmlPower.ResetMinMax();
         }
     }
 

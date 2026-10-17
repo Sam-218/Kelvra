@@ -53,6 +53,12 @@ public static class GameOverlay
 
     public static string? NameOf(string id) => Extras.FirstOrDefault(e => e.Id == id).Name;
 
+    /// <summary>
+    /// The name of a measured game value ("Frametime", "Latency") from its module, for when no game is running and the
+    /// value has no sensor to take its name from (the preview, the editor). Null when it isn't one module's only value.
+    /// </summary>
+    public static string? GameValueName(string id) => Modules.FirstOrDefault(m => m.Ids is [var only] && only == id)?.Name;
+
     public static bool IsExtra(string id) => id.StartsWith("extra:game:", StringComparison.Ordinal);
 
     /// <summary>The detected CPU/GPU sensors for the "CPU and GPU" module.</summary>
